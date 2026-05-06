@@ -1,0 +1,29 @@
+# macOS
+.DS_Store
+
+# Go build outputs
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace
+go.work
+go.work.sum
+
+# Baleen local runtime files
+.baleen/
+*.tar
+*.log
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+
+# Environment files
+.env
+.env.*
