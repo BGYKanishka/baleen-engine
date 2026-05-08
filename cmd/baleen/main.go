@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -14,19 +15,24 @@ import (
 )
 
 func main() {
-	fmt.Println("Starting Baleen Engine (Go Edition)...")
+	// CLI Flag
+	nodeName := flag.String("name", "Kanishka-MacBook", "Name of the Baleen Node")
+	port := flag.Int("port", 8080, "Port for the Baleen Node")
+	flag.Parse()
 
-	// 1. Setup Environment
+	fmt.Printf("Starting Baleen Engine as '%s' on Port %d...\n", *nodeName, *port)
+
+	// Setup Environment
 	tempDir, dbPath, err := config.SetupBaleenDirectory()
 	if err != nil {
 		panic(fmt.Errorf("failed to setup directories: %w", err))
 	}
 
-	// 2. Start Network Broadcaster
-	nodeName := "Kanishka-MacBook"
-	go network.StartBroadcaster(nodeName, 8080)
+	// Start Network Broadcaster & Listener
+	go network.StartBroadcaster(*nodeName, *port)
+	go network.DiscoverPeers(*nodeName)
 
-	// 3. Export Image
+	// Export Image
 	targetImage := "alpine:latest"
 	fmt.Printf("Preparing to export '%s'...\n", targetImage)
 
@@ -37,12 +43,12 @@ func main() {
 		fmt.Printf("Streaming image to disk at: %s\n", exportedFilePath)
 		fmt.Println("Export complete!")
 
-		// 4. Hash and Commit
+		// Hash and Commit
 		hash, _ := ledger.GenerateHash(exportedFilePath)
 		commit := ledger.Commit{
 			Hash:      hash,
 			Image:     targetImage,
-			Author:    nodeName,
+			Author:    *nodeName,
 			Timestamp: time.Now().Format(time.RFC3339),
 			Direction: "Exported",
 			Status:    "Completed",
@@ -51,7 +57,7 @@ func main() {
 		fmt.Println("Commit successfully written to local Ledger!")
 	}
 
-	// 5. Keep Alive
+	// Keep Alive
 	fmt.Println("\nBaleen Engine is now online and listening for peers.")
 	fmt.Println("Press Ctrl+C to shut down.")
 
