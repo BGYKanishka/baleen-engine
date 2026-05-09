@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 )
 
@@ -82,8 +83,14 @@ func PushImage(targetIP string, port int, filePath string, imageName string, has
 	return nil
 }
 
+// passes the metadata and provides a channel
+type ApprovalRequest struct {
+	Req      TransferRequest
+	Response chan bool
+}
+
 // runs a background TCP server to listen for incoming files
-func StartReceiver(port int, incomingDir string) {
+func StartReceiver(port int, incomingDir string, approvalChan chan ApprovalRequest) {
 	address := fmt.Sprintf(":%d", port)
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
@@ -99,15 +106,13 @@ func StartReceiver(port int, incomingDir string) {
 			continue
 		}
 
-		// Handle each incoming transfer in a separate goroutine
-		go handleIncomingTransfer(conn, incomingDir)
+		go handleIncomingTransfer(conn, incomingDir, approvalChan)
 	}
 }
 
-func handleIncomingTransfer(conn net.Conn, incomingDir string) {
+func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan ApprovalRequest) {
 	defer conn.Close()
 
-	// Read the JSON Handshake
 	var req TransferRequest
 	decoder := json.NewDecoder(conn)
 	if err := decoder.Decode(&req); err != nil {
@@ -115,15 +120,26 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string) {
 		return
 	}
 
-	mbSize := req.Size / 1024 / 1024
-	fmt.Printf("\n🔔 INCOMING REQUEST: '%s' (%d MB) from %s\n", req.ImageName, mbSize, req.Author)
+	// Ask approval
+	respChan := make(chan bool)
+	approvalChan <- ApprovalRequest{
+		Req:      req,
+		Response: respChan,
+	}
 
-	// Send "OK" Approval (Auto-accepting for MVP testing)
+	// Wait here until the types 'y' or 'n'
+	approved := <-respChan
+	if !approved {
+		conn.Write([]byte("NO"))
+		fmt.Println("\nTransfer rejected.")
+		return
+	}
+
+	// approved it and ready for the file stream
 	conn.Write([]byte("OK"))
 
-	// Create the landing file in ~/.baleen/incoming/
 	safeFilename := "incoming_" + req.Hash[:8] + ".tar"
-	targetPath := fmt.Sprintf("%s/%s", incomingDir, safeFilename)
+	targetPath := filepath.Join(incomingDir, safeFilename) // Cleaned up path joining
 
 	file, err := os.Create(targetPath)
 	if err != nil {
@@ -132,9 +148,8 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string) {
 	}
 	defer file.Close()
 
-	fmt.Printf("Downloading image to: %s\n", targetPath)
+	fmt.Printf("\nDownloading image to: %s\n", targetPath)
 
-	// Stream the raw bytes to disk
 	bytesReceived, err := io.Copy(file, conn)
 	if err != nil {
 		fmt.Println("File stream failed:", err)

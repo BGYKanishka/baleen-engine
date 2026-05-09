@@ -31,7 +31,6 @@ func main() {
 	// Start Network Broadcaster & Listener
 	go network.StartBroadcaster(*nodeName, *port)
 	go network.DiscoverPeers(*nodeName)
-	go transfer.StartReceiver(*port, incomingDir)
 
 	// Export Image
 	targetImage := "alpine:latest"
@@ -65,47 +64,83 @@ func main() {
 	fmt.Println("  push <IP>   - Send alpine:latest to target IP")
 	fmt.Println("  exit        - Shut down engine")
 
-	scanner := bufio.NewScanner(os.Stdin)
+	// Create channels for our inputs
+	inputChan := make(chan string)
+	approvalChan := make(chan transfer.ApprovalRequest)
+
+	// Start the TCP Receiver in the background to listen for incoming transfers
+	go transfer.StartReceiver(*port, incomingDir, approvalChan)
+
+	// constantly read user input
+	go func() {
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			inputChan <- scanner.Text()
+		}
+	}()
+
+	var pendingReq *transfer.ApprovalRequest
+	fmt.Print("\nbaleen> ")
+
+	// The Master Event Loop
 	for {
-		fmt.Print("\nbaleen> ")
-		if !scanner.Scan() {
-			break
-		}
+		select {
+		// remote node is trying to send us a file!
+		case req := <-approvalChan:
+			pendingReq = &req
+			mbSize := req.Req.Size / 1024 / 1024
+			fmt.Printf("\n\nINCOMING REQUEST: '%s' (%d MB) from %s\n", req.Req.ImageName, mbSize, req.Req.Author)
+			fmt.Print("Accept transfer? (y/n): ")
 
-		input := strings.TrimSpace(scanner.Text())
-		parts := strings.Split(input, " ")
+		case input := <-inputChan:
+			input = strings.TrimSpace(input)
 
-		if len(parts) == 0 || parts[0] == "" {
-			continue
-		}
-
-		switch parts[0] {
-		case "push":
-			if len(parts) < 2 {
-				fmt.Println("⚠️ Usage: push <IP> or push <IP>:<PORT>")
+			// waiting for user approval
+			if pendingReq != nil {
+				if strings.ToLower(input) == "y" {
+					pendingReq.Response <- true
+				} else {
+					pendingReq.Response <- false
+				}
+				pendingReq = nil
+				time.Sleep(100 * time.Millisecond)
+				fmt.Print("\nbaleen> ")
 				continue
 			}
 
-			targetStr := parts[1]
-			targetIP := targetStr
-			targetPort := 8080
-
-			// Check if the user specified a custom port
-			if strings.Contains(targetStr, ":") {
-				split := strings.Split(targetStr, ":")
-				targetIP = split[0]
-				fmt.Sscanf(split[1], "%d", &targetPort)
+			parts := strings.Split(input, " ")
+			if len(parts) == 0 || parts[0] == "" {
+				fmt.Print("baleen> ")
+				continue
 			}
 
-			err := transfer.PushImage(targetIP, targetPort, exportedFilePath, targetImage, hash, *nodeName)
-			if err != nil {
-				fmt.Println("Push failed:", err)
+			switch parts[0] {
+			case "push":
+				if len(parts) < 2 {
+					fmt.Println("Usage: push <IP> or push <IP>:<PORT>")
+				} else {
+					targetStr := parts[1]
+					targetIP := targetStr
+					targetPort := 8080
+					// Check if the user specified a custom port
+					if strings.Contains(targetStr, ":") {
+						split := strings.Split(targetStr, ":")
+						targetIP = split[0]
+						fmt.Sscanf(split[1], "%d", &targetPort)
+					}
+
+					err := transfer.PushImage(targetIP, targetPort, exportedFilePath, targetImage, hash, *nodeName)
+					if err != nil {
+						fmt.Println("Push failed:", err)
+					}
+				}
+			case "exit":
+				fmt.Println("\nShutting down Baleen Engine...")
+				os.Exit(0)
+			default:
+				fmt.Println("Unknown command. Try 'push <IP>' or 'exit'")
 			}
-		case "exit":
-			fmt.Println("\nShutting down Baleen Engine...")
-			os.Exit(0)
-		default:
-			fmt.Println("Unknown command. Try 'push <IP>' or 'exit'")
+			fmt.Print("\nbaleen> ")
 		}
 	}
 }
