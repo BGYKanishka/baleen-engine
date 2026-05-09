@@ -6,20 +6,20 @@ import (
 )
 
 // creates the folder and returns paths
-func SetupBaleenDirectory() (string, string, error) {
+func SetupBaleenDirectory() (string, string, string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
 	baleenRoot := filepath.Join(homeDir, ".baleen")
-	baleenTempDir := filepath.Join(baleenRoot, "temp")
+	tempDir := filepath.Join(baleenRoot, "temp")
+	incomingDir := filepath.Join(baleenRoot, "incoming")
 	dbPath := filepath.Join(baleenRoot, "baleen.db")
 
-	err = os.MkdirAll(baleenTempDir, 0755)
-	if err != nil {
-		return "", "", err
-	}
+	// Create both directories
+	os.MkdirAll(tempDir, 0755)
+	os.MkdirAll(incomingDir, 0755)
 
-	return baleenTempDir, dbPath, nil
+	return tempDir, incomingDir, dbPath, nil
 }
