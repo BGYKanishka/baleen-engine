@@ -32,46 +32,13 @@ func main() {
 	go network.StartBroadcaster(*nodeName, *port)
 	go network.DiscoverPeers(*nodeName)
 
-	// Export Image
-	targetImage := "alpine:latest"
-	fmt.Printf("Preparing to export '%s'...\n", targetImage)
-
-	exportedFilePath, err := docker.ExportImage(targetImage, tempDir)
-	if err != nil {
-		fmt.Printf("Export failed: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("Streaming image to disk at: %s\n", exportedFilePath)
-	fmt.Println("Export complete!")
-
-	// Hash and Commit
-	hash, _ := ledger.GenerateHash(exportedFilePath)
-	commit := ledger.Commit{
-		Hash:      hash,
-		Image:     targetImage,
-		Author:    *nodeName,
-		Timestamp: time.Now().Format(time.RFC3339),
-		Direction: "Exported",
-		Status:    "Completed",
-	}
-	ledger.RecordCommit(dbPath, commit)
-	fmt.Println("Commit successfully written to local Ledger!")
-
-	// Interactive CLI Loop
-	fmt.Println("\nBaleen Engine is now online!")
-	fmt.Println("Commands:")
-	fmt.Println("  push <IP>   - Send alpine:latest to target IP")
-	fmt.Println("  exit        - Shut down engine")
-
 	// Create channels for our inputs
 	inputChan := make(chan string)
 	approvalChan := make(chan transfer.ApprovalRequest)
+	downloadedChan := make(chan string)
 
-	// Start the TCP Receiver in the background to listen for incoming transfers
-	go transfer.StartReceiver(*port, incomingDir, approvalChan)
+	go transfer.StartReceiver(*port, incomingDir, approvalChan, downloadedChan)
 
-	// constantly read user input
 	go func() {
 		scanner := bufio.NewScanner(os.Stdin)
 		for scanner.Scan() {
@@ -80,17 +47,31 @@ func main() {
 	}()
 
 	var pendingReq *transfer.ApprovalRequest
+
+	fmt.Println("\nBaleen Engine is now online!")
+	fmt.Println("Commands:")
+	fmt.Println("  push <IP>:<PORT> <IMAGE> - Send a specific Docker image to target")
+	fmt.Println("  exit                     - Shut down engine")
 	fmt.Print("\nbaleen> ")
 
 	// The Master Event Loop
 	for {
 		select {
-		// remote node is trying to send us a file!
 		case req := <-approvalChan:
 			pendingReq = &req
 			mbSize := req.Req.Size / 1024 / 1024
 			fmt.Printf("\n\nINCOMING REQUEST: '%s' (%d MB) from %s\n", req.Req.ImageName, mbSize, req.Req.Author)
 			fmt.Print("Accept transfer? (y/n): ")
+
+		case receivedPath := <-downloadedChan:
+			fmt.Println("\nUnpacking and loading image into Docker Daemon...")
+			err := docker.LoadImage(receivedPath)
+			if err != nil {
+				fmt.Println("Failed to load image into Docker:", err)
+			} else {
+				fmt.Println("Image successfully loaded! (Type 'docker images' in another terminal to verify)")
+			}
+			fmt.Print("\nbaleen> ")
 
 		case input := <-inputChan:
 			input = strings.TrimSpace(input)
@@ -116,20 +97,45 @@ func main() {
 
 			switch parts[0] {
 			case "push":
-				if len(parts) < 2 {
-					fmt.Println("Usage: push <IP> or push <IP>:<PORT>")
+				if len(parts) < 3 {
+					fmt.Println(" Usage: push <IP>:<PORT> <IMAGE_NAME>")
 				} else {
 					targetStr := parts[1]
+					targetImage := parts[2]
 					targetIP := targetStr
 					targetPort := 8080
-					// Check if the user specified a custom port
+
 					if strings.Contains(targetStr, ":") {
 						split := strings.Split(targetStr, ":")
 						targetIP = split[0]
 						fmt.Sscanf(split[1], "%d", &targetPort)
 					}
 
-					err := transfer.PushImage(targetIP, targetPort, exportedFilePath, targetImage, hash, *nodeName)
+					// EXPORT Only when the user types push!
+					fmt.Printf("\n Preparing to export '%s'...\n", targetImage)
+					exportedFilePath, err := docker.ExportImage(targetImage, tempDir)
+					if err != nil {
+						fmt.Printf("Export failed (Do you have the image?): %v\n", err)
+						fmt.Print("\nbaleen> ")
+						continue
+					}
+
+					fmt.Printf("Streaming image to disk at: %s\n", exportedFilePath)
+
+					hash, _ := ledger.GenerateHash(exportedFilePath)
+					commit := ledger.Commit{
+						Hash:      hash,
+						Image:     targetImage,
+						Author:    *nodeName,
+						Timestamp: time.Now().Format(time.RFC3339),
+						Direction: "Exported",
+						Status:    "Completed",
+					}
+					ledger.RecordCommit(dbPath, commit)
+					fmt.Println("Commit successfully written to local Ledger!")
+
+					// Trigger the network transfer
+					err = transfer.PushImage(targetIP, targetPort, exportedFilePath, targetImage, hash, *nodeName)
 					if err != nil {
 						fmt.Println("Push failed:", err)
 					}
@@ -138,7 +144,7 @@ func main() {
 				fmt.Println("\nShutting down Baleen Engine...")
 				os.Exit(0)
 			default:
-				fmt.Println("Unknown command. Try 'push <IP>' or 'exit'")
+				fmt.Println("Unknown command. Try 'push <IP> <IMAGE>' or 'exit'")
 			}
 			fmt.Print("\nbaleen> ")
 		}

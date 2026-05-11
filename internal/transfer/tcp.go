@@ -90,7 +90,7 @@ type ApprovalRequest struct {
 }
 
 // runs a background TCP server to listen for incoming files
-func StartReceiver(port int, incomingDir string, approvalChan chan ApprovalRequest) {
+func StartReceiver(port int, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan string) {
 	address := fmt.Sprintf(":%d", port)
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
@@ -106,11 +106,10 @@ func StartReceiver(port int, incomingDir string, approvalChan chan ApprovalReque
 			continue
 		}
 
-		go handleIncomingTransfer(conn, incomingDir, approvalChan)
+		go handleIncomingTransfer(conn, incomingDir, approvalChan, downloadedChan)
 	}
 }
-
-func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan ApprovalRequest) {
+func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan string) {
 	defer conn.Close()
 
 	var req TransferRequest
@@ -119,14 +118,12 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 		fmt.Println("Failed to read transfer request")
 		return
 	}
-
 	// Ask approval
 	respChan := make(chan bool)
 	approvalChan <- ApprovalRequest{
 		Req:      req,
 		Response: respChan,
 	}
-
 	// Wait here until the types 'y' or 'n'
 	approved := <-respChan
 	if !approved {
@@ -134,27 +131,30 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 		fmt.Println("\nTransfer rejected.")
 		return
 	}
-
 	// approved it and ready for the file stream
 	conn.Write([]byte("OK"))
 
 	safeFilename := "incoming_" + req.Hash[:8] + ".tar"
-	targetPath := filepath.Join(incomingDir, safeFilename) // Cleaned up path joining
+	targetPath := filepath.Join(incomingDir, safeFilename)
 
 	file, err := os.Create(targetPath)
 	if err != nil {
 		fmt.Println("Failed to create incoming file:", err)
 		return
 	}
-	defer file.Close()
 
 	fmt.Printf("\nDownloading image to: %s\n", targetPath)
 
 	bytesReceived, err := io.Copy(file, conn)
+
+	file.Close()
+
 	if err != nil {
 		fmt.Println("File stream failed:", err)
 		return
 	}
 
 	fmt.Printf("Successfully received %d MB!\n", bytesReceived/1024/1024)
+
+	downloadedChan <- targetPath
 }
