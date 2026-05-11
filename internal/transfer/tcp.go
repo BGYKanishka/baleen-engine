@@ -115,7 +115,9 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	var req TransferRequest
 	decoder := json.NewDecoder(conn)
 	if err := decoder.Decode(&req); err != nil {
-		fmt.Println("Failed to read transfer request")
+		if err.Error() != "EOF" {
+			fmt.Println("Failed to read transfer request:", err)
+		}
 		return
 	}
 	// Ask approval

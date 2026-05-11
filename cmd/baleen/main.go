@@ -30,7 +30,12 @@ func main() {
 
 	// Start Network Broadcaster & Listener
 	go network.StartBroadcaster(*nodeName, *port)
-	go network.DiscoverPeers(*nodeName)
+
+	peerRegistry := network.NewPeerRegistry()
+	go network.DiscoverPeers(*nodeName, peerRegistry)
+
+	// background Checker!
+	go peerRegistry.StartHealthChecker()
 
 	// Create channels for our inputs
 	inputChan := make(chan string)
@@ -140,6 +145,21 @@ func main() {
 						fmt.Println("Push failed:", err)
 					}
 				}
+			case "peers":
+				peers := peerRegistry.GetAllPeers()
+				if len(peers) == 0 {
+					fmt.Println("No other peers found on the network yet.")
+				} else {
+					fmt.Println("\nActive Baleen Nodes:")
+					fmt.Println("--------------------------------------------------")
+					fmt.Printf("%-20s | %-20s\n", "NODE NAME", "ADDRESS (IP:PORT)")
+					fmt.Println("--------------------------------------------------")
+					for name, addr := range peers {
+						fmt.Printf("%-20s | %-20s\n", name, addr)
+					}
+					fmt.Println("--------------------------------------------------")
+				}
+
 			case "exit":
 				fmt.Println("\nShutting down Baleen Engine...")
 				os.Exit(0)
