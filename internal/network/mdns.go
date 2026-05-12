@@ -39,69 +39,6 @@ func (pr *PeerRegistry) GetAllPeers() map[string]string {
 	return copyMap
 }
 
-func StartBroadcaster(nodeName string, port int) {
-	server, err := zeroconf.Register(nodeName, "_baleen._tcp", "local.", port, nil, nil)
-	if err != nil {
-		panic(fmt.Errorf("failed to start mDNS broadcaster: %w", err))
-	}
-	defer server.Shutdown()
-
-	fmt.Printf("Broadcasting presence on local WiFi as '%s' (Port %d)...\n", nodeName, port)
-	select {}
-}
-
-// constantly scans the Wi-Fi network for other Baleen nodes
-func DiscoverPeers(currentNodeName string, registry *PeerRegistry) {
-	go func() {
-		for {
-			resolver, err := zeroconf.NewResolver(nil)
-			if err != nil {
-				time.Sleep(1 * time.Second)
-				continue
-			}
-
-			entries := make(chan *zeroconf.ServiceEntry)
-
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-
-			go func(results <-chan *zeroconf.ServiceEntry) {
-				for entry := range results {
-					if entry.Instance != currentNodeName {
-						var ip string
-						if len(entry.AddrIPv4) > 0 {
-							ip = entry.AddrIPv4[0].String()
-						} else {
-							continue
-						}
-						address := fmt.Sprintf("%s:%d", ip, entry.Port)
-
-						// Check our registry to see if we need to welcome them
-						prMap := registry.GetAllPeers()
-						if _, exists := prMap[entry.Instance]; !exists {
-							fmt.Printf("\n [Discovery] Found Remote Peer: %s (IP: %s)\n", entry.Instance, address)
-							fmt.Print("baleen> ")
-						}
-
-						// Refresh them
-						registry.AddPeer(entry.Instance, address)
-					}
-				}
-			}(entries)
-
-			// Start the sweep
-			err = resolver.Browse(ctx, "_baleen._tcp", "local.", entries)
-			if err != nil {
-				fmt.Println("Failed to browse network:", err)
-			}
-
-			// Block until the 15 seconds are up
-			<-ctx.Done()
-			cancel()
-
-		}
-	}()
-}
-
 // safely deletes a disconnected node from the registry
 func (pr *PeerRegistry) RemovePeer(name string) {
 	pr.mu.Lock()
@@ -113,8 +50,6 @@ func (pr *PeerRegistry) RemovePeer(name string) {
 func (pr *PeerRegistry) StartHealthChecker() {
 	for {
 		time.Sleep(10 * time.Second)
-
-		// grab a snapshot of current peers
 		pr.mu.RLock()
 		checkList := make(map[string]string)
 		for name, addr := range pr.nodes {
@@ -122,7 +57,6 @@ func (pr *PeerRegistry) StartHealthChecker() {
 		}
 		pr.mu.RUnlock()
 
-		// Ping each peer
 		for name, addr := range checkList {
 			conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 			if err != nil {
@@ -134,4 +68,79 @@ func (pr *PeerRegistry) StartHealthChecker() {
 			}
 		}
 	}
+}
+
+func StartBroadcaster(nodeName string, port int) {
+	fmt.Printf("Broadcasting presence on local WiFi as '%s' (Port %d)...\n", nodeName, port)
+	go func() {
+		for {
+			// Try to bind to the current WiFi network
+			server, err := zeroconf.Register(nodeName, "_baleen._tcp", "local.", port, nil, nil)
+			if err == nil {
+				time.Sleep(30 * time.Second)
+				server.Shutdown()
+			} else {
+				time.Sleep(5 * time.Second)
+			}
+		}
+	}()
+}
+
+// acts as a Continuous Sweeper
+func DiscoverPeers(currentNodeName string, registry *PeerRegistry) {
+	go func() {
+		for {
+			// Create new resolver every cycle
+			resolver, err := zeroconf.NewResolver(nil)
+			if err != nil {
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			entries := make(chan *zeroconf.ServiceEntry)
+
+			// Listen continuously
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+
+			go func(results <-chan *zeroconf.ServiceEntry) {
+				for entry := range results {
+					if entry.Instance != currentNodeName {
+
+						// Ping all IPs and keep the real one
+						var validAddress string
+						for _, ipAddr := range entry.AddrIPv4 {
+							testAddr := net.JoinHostPort(ipAddr.String(), fmt.Sprint(entry.Port))
+							// fast 500ms ping
+							conn, err := net.DialTimeout("tcp", testAddr, 500*time.Millisecond)
+							if err == nil {
+								conn.Close()
+								validAddress = testAddr
+								break
+							}
+						}
+
+						if validAddress == "" {
+							continue
+						}
+
+						prMap := registry.GetAllPeers()
+						if _, exists := prMap[entry.Instance]; !exists {
+							fmt.Printf("\n[Discovery] Found Remote Peer: %s (IP: %s)\n", entry.Instance, validAddress)
+							fmt.Print("baleen> ")
+						}
+
+						registry.AddPeer(entry.Instance, validAddress)
+					}
+				}
+			}(entries)
+
+			err = resolver.Browse(ctx, "_baleen._tcp", "local.", entries)
+			if err != nil {
+				fmt.Println("Failed to browse network:", err)
+			}
+
+			<-ctx.Done()
+			cancel()
+		}
+	}()
 }
