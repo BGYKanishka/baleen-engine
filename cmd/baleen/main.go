@@ -55,8 +55,9 @@ func main() {
 
 	fmt.Println("\nBaleen Engine is now online!")
 	fmt.Println("Commands:")
-	fmt.Println("  push <IP>:<PORT> <IMAGE> - Send a specific Docker image to target")
-	fmt.Println("  exit                     - Shut down engine")
+	fmt.Println("  push <NODE_NAME_OR_IP:PORT> <IMAGE> - Send a specific Docker image to target")
+	fmt.Println("  peers                               - Show active nodes on network")
+	fmt.Println("  exit                                - Shut down engine")
 	fmt.Print("\nbaleen> ")
 
 	// The Master Event Loop
@@ -103,10 +104,17 @@ func main() {
 			switch parts[0] {
 			case "push":
 				if len(parts) < 3 {
-					fmt.Println(" Usage: push <IP>:<PORT> <IMAGE_NAME>")
+					fmt.Println(" Usage: push <NODE_NAME_OR_IP:PORT> <IMAGE_NAME>")
 				} else {
 					targetStr := parts[1]
 					targetImage := parts[2]
+					// hybride dns resolver
+					peers := peerRegistry.GetAllPeers()
+					if resolvedIP, exists := peers[targetStr]; exists {
+						fmt.Printf("\nResolved Node '%s' to %s\n", targetStr, resolvedIP)
+						targetStr = resolvedIP
+					}
+
 					targetIP := targetStr
 					targetPort := 8080
 
@@ -164,7 +172,7 @@ func main() {
 				fmt.Println("\nShutting down Baleen Engine...")
 				os.Exit(0)
 			default:
-				fmt.Println("Unknown command. Try 'push <IP> <IMAGE>' or 'exit'")
+				fmt.Println("Unknown command. Try 'push <NODE_NAME> <IMAGE>' or 'exit'")
 			}
 			fmt.Print("\nbaleen> ")
 		}
