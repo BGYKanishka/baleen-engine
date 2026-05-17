@@ -2,16 +2,123 @@ package docker
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/docker/docker/client"
 )
 
-// saves a Docker image as a tar file and returns the saved file path.
-func ExportImage(imageName string, exportDir string) (string, error) {
+// holds the parameters for the handshake
+type PreflightConfig struct {
+	ImageName      string
+	ExpectedTarget string
+	ExportDir      string
+	BuildContext   string
+}
+
+// acts as an execution plan for the main engine
+type HandshakeReport struct {
+	Passed             bool
+	RequiresCrossBuild bool
+	TargetPlatform     string
+	FatalErrors        []error
+}
+
+// is the main entry point
+func ExportImage(config PreflightConfig) (string, error) {
+	fmt.Printf("🛫 Running pre-flight architecture checks for %s...\n", config.ImageName)
+
+	report := runPreflightHandshake(config)
+	if !report.Passed {
+		return "", fmt.Errorf("export aborted due to fatal errors: %v", report.FatalErrors)
+	}
+
+	imageToExport := config.ImageName
+	isTempImage := false
+
+	// Autonomous Architecture Resolution
+	if report.RequiresCrossBuild {
+		resolvedImage, err := silentlyResolveArchitecture(config.ImageName, report.TargetPlatform, config.BuildContext)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve architecture: %w", err)
+		}
+		imageToExport = resolvedImage
+		isTempImage = true
+	}
+
+	fmt.Printf("Exporting %s to tarball...\n", imageToExport)
+	tarballPath, err := saveToTarball(imageToExport, config.ExportDir)
+
+	if isTempImage {
+		fmt.Printf("🧹 Engine Cleanup: Removing temporary cross-compiled image (%s)...\n", imageToExport)
+		exec.Command("docker", "rmi", imageToExport).Run()
+	}
+
+	return tarballPath, err
+}
+
+func runPreflightHandshake(config PreflightConfig) HandshakeReport {
+	report := HandshakeReport{
+		Passed:         true,
+		TargetPlatform: config.ExpectedTarget,
+	}
+
+	// Connect to Docker to inspect the local image
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		report.Passed = false
+		report.FatalErrors = append(report.FatalErrors, fmt.Errorf("docker daemon unreachable: %w", err))
+		return report
+	}
+	defer cli.Close()
+
+	ctx := context.Background()
+	inspectData, _, err := cli.ImageInspectWithRaw(ctx, config.ImageName)
+
+	if err != nil {
+		report.RequiresCrossBuild = true
+	} else {
+		actualPlatform := inspectData.Os + "/" + inspectData.Architecture
+		if actualPlatform != config.ExpectedTarget {
+			report.RequiresCrossBuild = true
+		}
+	}
+
+	return report
+}
+
+// performs a local cross-compilation build
+func silentlyResolveArchitecture(imageName string, targetPlatform string, buildContext string) (string, error) {
+	dockerfilePath := filepath.Join(buildContext, "Dockerfile")
+	if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
+		return "", fmt.Errorf("\nEngine Alert: Could not find a 'Dockerfile' at path: '%s'\nIf your app is in a different folder, add the path to your command:\nExample: push <node> <image> /path/to/your/app", buildContext)
+	}
+
+	tempExportTag := fmt.Sprintf("%s-baleen-tmp", imageName)
+
+	fmt.Printf("\nArchitecture mismatch detected. Cross-compiling %s for %s locally...\n", imageName, targetPlatform)
+
+	cmd := exec.Command("docker", "buildx", "build", "--platform", targetPlatform, "-t", tempExportTag, "--load", buildContext)
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	buildErr := cmd.Run()
+	if buildErr != nil {
+		return "", fmt.Errorf("\nAutonomous cross-compilation failed: %w", buildErr)
+	}
+
+	fmt.Printf("\nAutonomous cross-compilation successful.\n")
+
+	return tempExportTag, nil
+}
+
+// saves the specified image as a tarball in the export directory, returning the path to the tarball
+func saveToTarball(imageName string, exportDir string) (string, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return "", err
