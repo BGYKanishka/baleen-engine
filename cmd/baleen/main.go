@@ -4,7 +4,10 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -43,6 +46,19 @@ func main() {
 	downloadedChan := make(chan string)
 
 	go transfer.StartReceiver(*port, incomingDir, approvalChan, downloadedChan)
+
+	go func() {
+		metadataPort := *port + 1
+		http.HandleFunc("/architecture", func(w http.ResponseWriter, r *http.Request) {
+			arch := "linux/" + runtime.GOARCH
+			w.Write([]byte(arch))
+		})
+
+		err := http.ListenAndServe(fmt.Sprintf(":%d", metadataPort), nil)
+		if err != nil && err != http.ErrServerClosed {
+			fmt.Println("Metadata server error:", err)
+		}
+	}()
 
 	go func() {
 		scanner := bufio.NewScanner(os.Stdin)
@@ -104,10 +120,16 @@ func main() {
 			switch parts[0] {
 			case "push":
 				if len(parts) < 3 {
-					fmt.Println(" Usage: push <NODE_NAME_OR_IP:PORT> <IMAGE_NAME>")
+					fmt.Println(" Usage: push <NODE_NAME_OR_IP:PORT> <IMAGE_NAME> [OPTIONAL: PATH_TO_DOCKERFILE]")
 				} else {
 					targetStr := parts[1]
 					targetImage := parts[2]
+
+					buildContext := "."
+					if len(parts) >= 4 {
+						buildContext = parts[3]
+					}
+
 					// hybride dns resolver
 					peers := peerRegistry.GetAllPeers()
 					if resolvedIP, exists := peers[targetStr]; exists {
@@ -123,12 +145,38 @@ func main() {
 						targetIP = split[0]
 						fmt.Sscanf(split[1], "%d", &targetPort)
 					}
+	
+					fmt.Printf("\nPinging %s to detect architecture...\n", targetIP)
+					targetArch := "linux/amd64" // Fallback default
 
-					// EXPORT Only when the user types push!
-					fmt.Printf("\n Preparing to export '%s'...\n", targetImage)
-					exportedFilePath, err := docker.ExportImage(targetImage, tempDir)
+					metadataURL := fmt.Sprintf("http://%s:%d/architecture", targetIP, targetPort+1)
+
+					// Simple HTTP client with timeout to get target architecture
+					client := http.Client{Timeout: 2 * time.Second}
+					resp, err := client.Get(metadataURL)
+
+					if err == nil {
+						bodyBytes, _ := io.ReadAll(resp.Body)
+						resp.Body.Close()
+						targetArch = strings.TrimSpace(string(bodyBytes))
+						fmt.Printf("Target architecture detected: %s\n", targetArch)
+					} else {
+						fmt.Printf("Could not reach pre-flight server at %s. Falling back to %s\n", targetIP, targetArch)
+					}
+
+					fmt.Printf("Preparing to export '%s'...\n", targetImage)
+
+					// Pass the extracted buildContext down into the engine
+					configReq := docker.PreflightConfig{
+						ImageName:      targetImage,
+						ExpectedTarget: targetArch,
+						ExportDir:      tempDir,
+						BuildContext:   buildContext,
+					}
+
+					exportedFilePath, err := docker.ExportImage(configReq)
 					if err != nil {
-						fmt.Printf("Export failed (Do you have the image?): %v\n", err)
+						fmt.Printf("Export failed: %v\n", err)
 						fmt.Print("\nbaleen> ")
 						continue
 					}
