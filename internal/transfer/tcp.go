@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"github.com/BGYKanishka/baleen-engine/internal/ledger"
 )
 
 // send JSON metadata before the actual file bytes
@@ -115,9 +117,6 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	var req TransferRequest
 	decoder := json.NewDecoder(conn)
 	if err := decoder.Decode(&req); err != nil {
-		if err.Error() != "EOF" {
-			fmt.Println("Failed to read transfer request:", err)
-		}
 		return
 	}
 	// Ask approval
@@ -156,6 +155,24 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 		return
 	}
 
+	//Verify the integrity of the received file using the provided hash
+	fmt.Println("Verifying payload integrity...")
+
+	actualHash, err := ledger.GenerateHash(targetPath)
+	if err != nil {
+		fmt.Printf("Failed to calculate checksum: %v\n", err)
+		os.Remove(targetPath)
+		return
+	}
+
+	if actualHash != req.Hash {
+		fmt.Printf("INTEGRITY FAILURE: Checksum mismatch!\nExpected: %s\nActual:   %s\n", req.Hash, actualHash)
+		fmt.Println("The payload was corrupted during network transit. Deleting file...")
+		os.Remove(targetPath)
+		return
+	}
+
+	fmt.Println("Integrity verified. Payload is mathematically identical to source.")
 	fmt.Printf("Successfully received %d MB!\n", bytesReceived/1024/1024)
 
 	downloadedChan <- targetPath
