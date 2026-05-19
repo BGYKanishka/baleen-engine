@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"sort"
 
 	"go.etcd.io/bbolt"
 )
@@ -19,7 +20,7 @@ type Commit struct {
 	Status    string `json:"status"`
 }
 
-//streams the file into a hash
+// streams the file into a hash
 func GenerateHash(filePath string) (string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -54,4 +55,42 @@ func RecordCommit(dbPath string, commit Commit) error {
 		}
 		return bucket.Put([]byte(commit.Hash), commitJSON)
 	})
+}
+
+// retrieves all commits from the database and sorts them newest first
+func GetHistory(dbPath string) ([]Commit, error) {
+	db, err := bbolt.Open(dbPath, 0600, &bbolt.Options{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	var history []Commit
+
+	err = db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte("Ledger"))
+		if bucket == nil {
+			return nil
+		}
+
+		return bucket.ForEach(func(k, v []byte) error {
+			var commit Commit
+			if err := json.Unmarshal(v, &commit); err != nil {
+				return err
+			}
+			history = append(history, commit)
+			return nil
+		})
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort by timestamp descending (newest first)
+	sort.Slice(history, func(i, j int) bool {
+		return history[i].Timestamp > history[j].Timestamp
+	})
+
+	return history, nil
 }
