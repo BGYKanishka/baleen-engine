@@ -145,7 +145,7 @@ func main() {
 						targetIP = split[0]
 						fmt.Sscanf(split[1], "%d", &targetPort)
 					}
-	
+
 					fmt.Printf("\nPinging %s to detect architecture...\n", targetIP)
 					targetArch := "linux/amd64" // Fallback default
 
@@ -172,9 +172,32 @@ func main() {
 						ExpectedTarget: targetArch,
 						ExportDir:      tempDir,
 						BuildContext:   buildContext,
+						ForceRawExport: false,
 					}
 
-					exportedFilePath, err := docker.ExportImage(configReq)
+					exportedFilePath, finalArch, err := docker.ExportImage(configReq)
+					//
+					if err != nil {
+						if err.Error() == "ERR_NO_DOCKERFILE" {
+							fmt.Printf("\n No Dockerfile found at '%s'. Cannot autonomously cross-compile.\n", buildContext)
+							fmt.Print("Enter path to your project folder, or type 'n' to send as-is (Receiver will use emulation): ")
+
+							// wait for the user to type into the channel
+							response := <-inputChan
+							response = strings.TrimSpace(response)
+
+							if strings.ToLower(response) == "n" {
+								fmt.Println("\nInitiating Raw Transfer Mode (Emulation Fallback)...")
+								configReq.ForceRawExport = true
+								exportedFilePath, finalArch, err = docker.ExportImage(configReq)
+							} else {
+								fmt.Printf("\nRetrying cross-compilation with build context: %s\n", response)
+								configReq.BuildContext = response
+								exportedFilePath, finalArch, err = docker.ExportImage(configReq)
+							}
+						}
+					}
+
 					if err != nil {
 						fmt.Printf("Export failed: %v\n", err)
 						fmt.Print("\nbaleen> ")
@@ -196,7 +219,7 @@ func main() {
 					fmt.Println("Commit successfully written to local Ledger!")
 
 					// Trigger the network transfer
-					err = transfer.PushImage(targetIP, targetPort, exportedFilePath, targetImage, hash, *nodeName)
+					err = transfer.PushImage(targetIP, targetPort, exportedFilePath, targetImage, hash, *nodeName, finalArch)
 					if err != nil {
 						fmt.Println("Push failed:", err)
 					}

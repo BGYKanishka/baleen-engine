@@ -7,7 +7,10 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
+
+	"github.com/BGYKanishka/baleen-engine/internal/ledger"
 )
 
 // send JSON metadata before the actual file bytes
@@ -16,10 +19,11 @@ type TransferRequest struct {
 	Size      int64  `json:"size"`
 	Hash      string `json:"hash"`
 	Author    string `json:"author"`
+	ImageArch string `json:"image_arch"`
 }
 
 // connects to the remote node / asks for permission / streams the file
-func PushImage(targetIP string, port int, filePath string, imageName string, hash string, author string) error {
+func PushImage(targetIP string, port int, filePath string, imageName string, hash string, author string, imageArch string) error {
 	// Open the local .tar file
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -50,6 +54,7 @@ func PushImage(targetIP string, port int, filePath string, imageName string, has
 		Size:      fileInfo.Size(),
 		Hash:      hash,
 		Author:    author,
+		ImageArch: imageArch,
 	}
 
 	// use json Encoder to write the JSON directly into the network socket
@@ -115,9 +120,6 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	var req TransferRequest
 	decoder := json.NewDecoder(conn)
 	if err := decoder.Decode(&req); err != nil {
-		if err.Error() != "EOF" {
-			fmt.Println("Failed to read transfer request:", err)
-		}
 		return
 	}
 	// Ask approval
@@ -156,7 +158,39 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 		return
 	}
 
+	//Verify the integrity of the received file using the provided hash
+	fmt.Println("Verifying payload integrity...")
+
+	actualHash, err := ledger.GenerateHash(targetPath)
+	if err != nil {
+		fmt.Printf("Failed to calculate checksum: %v\n", err)
+		os.Remove(targetPath)
+		return
+	}
+
+	if actualHash != req.Hash {
+		fmt.Printf("INTEGRITY FAILURE: Checksum mismatch!\nExpected: %s\nActual:   %s\n", req.Hash, actualHash)
+		fmt.Println("The payload was corrupted during network transit. Deleting file...")
+		os.Remove(targetPath)
+		return
+	}
+
+	fmt.Println("Integrity verified. Payload is mathematically identical to source.")
 	fmt.Printf("Successfully received %d MB!\n", bytesReceived/1024/1024)
+
+	localArch := "linux/" + runtime.GOARCH
+	if req.ImageArch != "" && req.ImageArch != localArch && req.ImageArch != "unknown" {
+		fmt.Println("\n==================================================")
+		fmt.Println("ARCHITECTURE MISMATCH DETECTED ON ARRIVAL ⚠️")
+		fmt.Println("==================================================")
+		fmt.Printf(" This image is built for '%s'.\n", req.ImageArch)
+		fmt.Printf(" Your machine is running '%s'.\n", localArch)
+		fmt.Println(" Docker will use QEMU/Rosetta emulation to run it.")
+		fmt.Println("\n To start this container, use the following command:")
+		fmt.Printf("   docker run --platform %s %s\n", req.ImageArch, req.ImageName)
+		fmt.Println("\n==================================================")
+	}
+	// --------------------------------------
 
 	downloadedChan <- targetPath
 }
