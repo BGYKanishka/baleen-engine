@@ -93,6 +93,7 @@ func main() {
 	fmt.Println("Commands:")
 	fmt.Println("  push <NODE_NAME_OR_IP:PORT> <IMAGE> - Send a specific Docker image to target")
 	fmt.Println("  peers                               - Show active nodes on network")
+	fmt.Println("  history                             - View the transfer ledger")
 	fmt.Println("  exit                                - Shut down engine")
 
 	// The Master Event Loop
@@ -260,6 +261,39 @@ func main() {
 						fmt.Printf("%-20s | %-20s\n", name, addr)
 					}
 					fmt.Println("--------------------------------------------------")
+				}
+			case "history":
+				historyList, err := ledger.GetHistory(dbPath)
+				if err != nil {
+					fmt.Println("Failed to read ledger:", err)
+					continue
+				}
+
+				if len(historyList) == 0 {
+					fmt.Println("\nThe ledger is empty. No transfers recorded yet.")
+				} else {
+					fmt.Println("\nBaleen Transfer Ledger:")
+					fmt.Println("--------------------------------------------------------------------------------------------------")
+					fmt.Printf("%-20s | %-12s | %-10s | %-30s | %-10s\n", "DATE", "DIRECTION", "STATUS", "IMAGE", "HASH")
+					fmt.Println("--------------------------------------------------------------------------------------------------")
+					for _, c := range historyList {
+						shortHash := c.Hash
+						if len(shortHash) > 8 {
+							shortHash = shortHash[:8]
+						}
+
+						// Format the timestamp
+						parsedTime, _ := time.Parse(time.RFC3339, c.Timestamp)
+						displayTime := parsedTime.Format("Jan 02 15:04:05")
+
+						displayImage := c.Image
+						if len(displayImage) > 30 {
+							displayImage = displayImage[:27] + "..."
+						}
+
+						fmt.Printf("%-20s | %-12s | %-10s | %-30s | %-10s\n", displayTime, c.Direction, c.Status, displayImage, shortHash)
+					}
+					fmt.Println("--------------------------------------------------------------------------------------------------")
 				}
 
 			case "exit":
