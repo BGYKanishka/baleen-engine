@@ -1,12 +1,12 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -16,6 +16,7 @@ import (
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
 	"github.com/BGYKanishka/baleen-engine/internal/network"
 	"github.com/BGYKanishka/baleen-engine/internal/transfer"
+	"github.com/chzyer/readline"
 )
 
 func main() {
@@ -60,10 +61,29 @@ func main() {
 		}
 	}()
 
+	// Initialize readline for interactive CLI with history support
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:          "baleen> ",
+		HistoryFile:     filepath.Join(tempDir, "baleen_history.tmp"),
+		InterruptPrompt: "^C",
+		EOFPrompt:       "exit",
+	})
+	if err != nil {
+		panic(err)
+	}
+	defer rl.Close()
+
+	// Feed readline input into our master channel
 	go func() {
-		scanner := bufio.NewScanner(os.Stdin)
-		for scanner.Scan() {
-			inputChan <- scanner.Text()
+		for {
+			line, err := rl.Readline()
+			if err != nil { // Handles Ctrl+C or Ctrl+D
+				if err == readline.ErrInterrupt {
+					continue
+				}
+				os.Exit(0)
+			}
+			inputChan <- line
 		}
 	}()
 
@@ -74,7 +94,6 @@ func main() {
 	fmt.Println("  push <NODE_NAME_OR_IP:PORT> <IMAGE> - Send a specific Docker image to target")
 	fmt.Println("  peers                               - Show active nodes on network")
 	fmt.Println("  exit                                - Shut down engine")
-	fmt.Print("\nbaleen> ")
 
 	// The Master Event Loop
 	for {
@@ -83,7 +102,8 @@ func main() {
 			pendingReq = &req
 			mbSize := req.Req.Size / 1024 / 1024
 			fmt.Printf("\n\nINCOMING REQUEST: '%s' (%d MB) from %s\n", req.Req.ImageName, mbSize, req.Req.Author)
-			fmt.Print("Accept transfer? (y/n): ")
+			rl.SetPrompt("Accept transfer? (y/n): ")
+			rl.Refresh()
 
 		case receivedPath := <-downloadedChan:
 			fmt.Println("\nUnpacking and loading image into Docker Daemon...")
@@ -93,7 +113,7 @@ func main() {
 			} else {
 				fmt.Println("Image successfully loaded! (Type 'docker images' in another terminal to verify)")
 			}
-			fmt.Print("\nbaleen> ")
+			rl.Refresh()
 
 		case input := <-inputChan:
 			input = strings.TrimSpace(input)
@@ -107,13 +127,13 @@ func main() {
 				}
 				pendingReq = nil
 				time.Sleep(100 * time.Millisecond)
-				fmt.Print("\nbaleen> ")
+				rl.SetPrompt("baleen> ")
+				rl.Refresh()
 				continue
 			}
 
 			parts := strings.Split(input, " ")
 			if len(parts) == 0 || parts[0] == "" {
-				fmt.Print("baleen> ")
 				continue
 			}
 
@@ -176,15 +196,20 @@ func main() {
 					}
 
 					exportedFilePath, finalArch, err := docker.ExportImage(configReq)
-					//
+
 					if err != nil {
 						if err.Error() == "ERR_NO_DOCKERFILE" {
 							fmt.Printf("\n No Dockerfile found at '%s'. Cannot autonomously cross-compile.\n", buildContext)
-							fmt.Print("Enter path to your project folder, or type 'n' to send as-is (Receiver will use emulation): ")
+							rl.SetPrompt("Enter path to your project folder, or type 'n' to send as-is: ")
+							rl.Refresh()
 
 							// wait for the user to type into the channel
 							response := <-inputChan
 							response = strings.TrimSpace(response)
+
+							// Restore the prompt
+							rl.SetPrompt("baleen> ")
+							rl.Refresh()
 
 							if strings.ToLower(response) == "n" {
 								fmt.Println("\nInitiating Raw Transfer Mode (Emulation Fallback)...")
@@ -200,7 +225,6 @@ func main() {
 
 					if err != nil {
 						fmt.Printf("Export failed: %v\n", err)
-						fmt.Print("\nbaleen> ")
 						continue
 					}
 
@@ -218,7 +242,6 @@ func main() {
 					ledger.RecordCommit(dbPath, commit)
 					fmt.Println("Commit successfully written to local Ledger!")
 
-					// Trigger the network transfer
 					err = transfer.PushImage(targetIP, targetPort, exportedFilePath, targetImage, hash, *nodeName, finalArch)
 					if err != nil {
 						fmt.Println("Push failed:", err)
@@ -245,7 +268,6 @@ func main() {
 			default:
 				fmt.Println("Unknown command. Try 'push <NODE_NAME> <IMAGE>' or 'exit'")
 			}
-			fmt.Print("\nbaleen> ")
 		}
 	}
 }
