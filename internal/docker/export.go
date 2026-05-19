@@ -18,6 +18,7 @@ type PreflightConfig struct {
 	ExpectedTarget string
 	ExportDir      string
 	BuildContext   string
+	ForceRawExport bool
 }
 
 // acts as an execution plan for the main engine
@@ -25,29 +26,41 @@ type HandshakeReport struct {
 	Passed             bool
 	RequiresCrossBuild bool
 	TargetPlatform     string
+	ActualPlatform     string
 	FatalErrors        []error
 }
 
 // is the main entry point
-func ExportImage(config PreflightConfig) (string, error) {
+func ExportImage(config PreflightConfig) (string, string, error) {
 	fmt.Printf("🛫 Running pre-flight architecture checks for %s...\n", config.ImageName)
 
 	report := runPreflightHandshake(config)
 	if !report.Passed {
-		return "", fmt.Errorf("export aborted due to fatal errors: %v", report.FatalErrors)
+		return "", "", fmt.Errorf("export aborted due to fatal errors: %v", report.FatalErrors)
 	}
 
 	imageToExport := config.ImageName
 	isTempImage := false
+	finalArch := report.ActualPlatform
 
 	// Autonomous Architecture Resolution
-	if report.RequiresCrossBuild {
+	if report.RequiresCrossBuild && !config.ForceRawExport {
+		dockerfilePath := filepath.Join(config.BuildContext, "Dockerfile")
+		if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
+			return "", "", fmt.Errorf("ERR_NO_DOCKERFILE")
+		}
+
 		resolvedImage, err := silentlyResolveArchitecture(config.ImageName, report.TargetPlatform, config.BuildContext)
 		if err != nil {
-			return "", fmt.Errorf("failed to resolve architecture: %w", err)
+			return "", "", fmt.Errorf("failed to resolve architecture: %w", err)
 		}
 		imageToExport = resolvedImage
 		isTempImage = true
+		finalArch = report.TargetPlatform
+	}
+
+	if config.ForceRawExport {
+		fmt.Printf("Forcing Raw Export. Sending '%s' natively...\n", finalArch)
 	}
 
 	fmt.Printf("Exporting %s to tarball...\n", imageToExport)
@@ -58,7 +71,7 @@ func ExportImage(config PreflightConfig) (string, error) {
 		exec.Command("docker", "rmi", imageToExport).Run()
 	}
 
-	return tarballPath, err
+	return tarballPath, finalArch, err
 }
 
 func runPreflightHandshake(config PreflightConfig) HandshakeReport {
@@ -81,8 +94,10 @@ func runPreflightHandshake(config PreflightConfig) HandshakeReport {
 
 	if err != nil {
 		report.RequiresCrossBuild = true
+		report.ActualPlatform = "unknown"
 	} else {
 		actualPlatform := inspectData.Os + "/" + inspectData.Architecture
+		report.ActualPlatform = actualPlatform
 		if actualPlatform != config.ExpectedTarget {
 			report.RequiresCrossBuild = true
 		}
@@ -93,11 +108,6 @@ func runPreflightHandshake(config PreflightConfig) HandshakeReport {
 
 // performs a local cross-compilation build
 func silentlyResolveArchitecture(imageName string, targetPlatform string, buildContext string) (string, error) {
-	dockerfilePath := filepath.Join(buildContext, "Dockerfile")
-	if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
-		return "", fmt.Errorf("\nEngine Alert: Could not find a 'Dockerfile' at path: '%s'\nIf your app is in a different folder, add the path to your command:\nExample: push <node> <image> /path/to/your/app", buildContext)
-	}
-
 	tempExportTag := fmt.Sprintf("%s-baleen-tmp", imageName)
 
 	fmt.Printf("\nArchitecture mismatch detected. Cross-compiling %s for %s locally...\n", imageName, targetPlatform)
@@ -132,7 +142,8 @@ func saveToTarball(imageName string, exportDir string) (string, error) {
 	}
 	defer imageStream.Close()
 
-	safeFilename := strings.ReplaceAll(imageName, ":", "_") + ".tar"
+	safeFilename := strings.ReplaceAll(imageName, ":", "_")
+	safeFilename = strings.ReplaceAll(safeFilename, "/", "-") + ".tar"
 	targetPath := filepath.Join(exportDir, safeFilename)
 
 	outFile, err := os.Create(targetPath)

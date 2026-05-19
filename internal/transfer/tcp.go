@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
@@ -18,10 +19,11 @@ type TransferRequest struct {
 	Size      int64  `json:"size"`
 	Hash      string `json:"hash"`
 	Author    string `json:"author"`
+	ImageArch string `json:"image_arch"`
 }
 
 // connects to the remote node / asks for permission / streams the file
-func PushImage(targetIP string, port int, filePath string, imageName string, hash string, author string) error {
+func PushImage(targetIP string, port int, filePath string, imageName string, hash string, author string, imageArch string) error {
 	// Open the local .tar file
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -52,6 +54,7 @@ func PushImage(targetIP string, port int, filePath string, imageName string, has
 		Size:      fileInfo.Size(),
 		Hash:      hash,
 		Author:    author,
+		ImageArch: imageArch,
 	}
 
 	// use json Encoder to write the JSON directly into the network socket
@@ -174,6 +177,20 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 
 	fmt.Println("Integrity verified. Payload is mathematically identical to source.")
 	fmt.Printf("Successfully received %d MB!\n", bytesReceived/1024/1024)
+
+	localArch := "linux/" + runtime.GOARCH
+	if req.ImageArch != "" && req.ImageArch != localArch && req.ImageArch != "unknown" {
+		fmt.Println("\n==================================================")
+		fmt.Println("ARCHITECTURE MISMATCH DETECTED ON ARRIVAL ⚠️")
+		fmt.Println("==================================================")
+		fmt.Printf(" This image is built for '%s'.\n", req.ImageArch)
+		fmt.Printf(" Your machine is running '%s'.\n", localArch)
+		fmt.Println(" Docker will use QEMU/Rosetta emulation to run it.")
+		fmt.Println("\n To start this container, use the following command:")
+		fmt.Printf("   docker run --platform %s %s\n", req.ImageArch, req.ImageName)
+		fmt.Println("\n==================================================")
+	}
+	// --------------------------------------
 
 	downloadedChan <- targetPath
 }
