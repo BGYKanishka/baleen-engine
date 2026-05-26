@@ -94,3 +94,44 @@ func GetHistory(dbPath string) ([]Commit, error) {
 
 	return history, nil
 }
+
+func MarkLayersAsOwned(dbPath string, layers []string) error {
+	db, err := bbolt.Open(dbPath, 0600, nil)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	return db.Update(func(tx *bbolt.Tx) error {
+		bucket, err := tx.CreateBucketIfNotExists([]byte("KnownLayers"))
+		if err != nil {
+			return err
+		}
+		for _, layer := range layers {
+			if err := bucket.Put([]byte(layer), []byte("1")); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func HasLayer(dbPath string, layer string) bool {
+	db, err := bbolt.Open(dbPath, 0600, &bbolt.Options{ReadOnly: true})
+	if err != nil {
+		return false
+	}
+	defer db.Close()
+
+	hasLayer := false
+	db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte("KnownLayers"))
+		if bucket != nil {
+			if bucket.Get([]byte(layer)) != nil {
+				hasLayer = true
+			}
+		}
+		return nil
+	})
+	return hasLayer
+}
