@@ -10,16 +10,29 @@ import (
 	"runtime"
 	"strconv"
 
+	"github.com/BGYKanishka/baleen-engine/internal/config"
+	"github.com/BGYKanishka/baleen-engine/internal/docker"
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
 )
 
 // send JSON metadata before the actual file bytes
 type TransferRequest struct {
-	ImageName string `json:"image"`
-	Size      int64  `json:"size"`
-	Hash      string `json:"hash"`
-	Author    string `json:"author"`
-	ImageArch string `json:"image_arch"`
+	ImageName string   `json:"image"`
+	Size      int64    `json:"size"`
+	Hash      string   `json:"hash"`
+	Author    string   `json:"author"`
+	ImageArch string   `json:"image_arch"`
+	Layers    []string `json:"layers"`
+}
+
+type TransferResponse struct {
+	Approved      bool     `json:"approved"`
+	MissingLayers []string `json:"missing_layers"`
+}
+
+type StreamHeader struct {
+	PrunedHash string `json:"pruned_hash"`
+	PrunedSize int64  `json:"pruned_size"`
 }
 
 // connects to the remote node / asks for permission / streams the file
@@ -49,12 +62,19 @@ func PushImage(targetIP string, port int, filePath string, imageName string, has
 
 	// Send the Metadata Handshake
 	fmt.Println("Sending transfer request metadata...")
+
+	layers, err := docker.GetImageLayers(imageName)
+	if err != nil {
+		fmt.Printf("Warning: Failed to extract layers for delta transfer: %v\n", err)
+	}
+
 	req := TransferRequest{
 		ImageName: imageName,
 		Size:      fileInfo.Size(),
 		Hash:      hash,
 		Author:    author,
 		ImageArch: imageArch,
+		Layers:    layers,
 	}
 
 	// use json Encoder to write the JSON directly into the network socket
@@ -66,17 +86,53 @@ func PushImage(targetIP string, port int, filePath string, imageName string, has
 	// Wait for the Receiver's Approval
 	fmt.Println("Waiting for receiver to approve the transfer...")
 
-	//read exactly 2 bytes from the receiver/expecting the word "OK"
-	reply := make([]byte, 2)
-	_, err = io.ReadFull(conn, reply)
-	if err != nil || string(reply) != "OK" {
+	var response TransferResponse
+	decoder := json.NewDecoder(conn)
+	if err := decoder.Decode(&response); err != nil {
+		return fmt.Errorf("failed to read transfer response: %w", err)
+	}
+
+	if !response.Approved {
 		return fmt.Errorf("Transfer rejected by remote node")
 	}
 
-	fmt.Println("Request approved! Streaming file data...")
+	fmt.Printf("Request approved! Receiver is missing %d layers. Pruning tarball...\n", len(response.MissingLayers))
 
-	// stream the actual massive file (Bypasses RAM, goes Disk -> Network)
-	bytesSent, err := io.Copy(conn, file)
+	// Prune the tarball locally
+	prunedFilePath := filePath + ".pruned"
+	err = PruneTarball(filePath, prunedFilePath, response.MissingLayers)
+	if err != nil {
+		return fmt.Errorf("failed to prune tarball: %w", err)
+	}
+	defer os.Remove(prunedFilePath)
+
+	// Hash the new pruned file
+	prunedHash, err := ledger.GenerateHash(prunedFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to hash pruned file: %w", err)
+	}
+
+	prunedFileInfo, _ := os.Stat(prunedFilePath)
+
+	// Send the Stream Header
+	header := StreamHeader{
+		PrunedHash: prunedHash,
+		PrunedSize: prunedFileInfo.Size(),
+	}
+	if err := json.NewEncoder(conn).Encode(header); err != nil {
+		return fmt.Errorf("failed to send stream header: %w", err)
+	}
+
+	fmt.Println("Streaming optimized file data...")
+
+	// Stream the pruned file to the network
+	prunedFile, err := os.Open(prunedFilePath)
+	if err != nil {
+		return err
+	}
+	defer prunedFile.Close()
+
+	bytesSent, err := io.Copy(conn, prunedFile)
 	if err != nil {
 		return fmt.Errorf("file stream failed: %w", err)
 	}
@@ -131,14 +187,46 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	// Wait here until the types 'y' or 'n'
 	approved := <-respChan
 	if !approved {
-		conn.Write([]byte("NO"))
+		json.NewEncoder(conn).Encode(TransferResponse{Approved: false})
 		fmt.Println("\nTransfer rejected.")
 		return
 	}
-	// approved it and ready for the file stream
-	conn.Write([]byte("OK"))
 
-	safeFilename := "incoming_" + req.Hash[:8] + ".tar"
+	// Figure out what layers we actually need
+	_, _, dbPath, err := config.SetupBaleenDirectory()
+	if err != nil {
+		fmt.Println("Error getting dbPath:", err)
+		return
+	}
+
+	var missingLayers []string
+	var alreadyOwnedLayers []string
+
+	for _, layerDigest := range req.Layers {
+		// Check your bbolt ledger
+		hasLayer := ledger.HasLayer(dbPath, layerDigest)
+		if !hasLayer {
+			missingLayers = append(missingLayers, layerDigest)
+		} else {
+			alreadyOwnedLayers = append(alreadyOwnedLayers, layerDigest)
+		}
+	}
+
+	// Send the negotiation response
+	response := TransferResponse{
+		Approved:      true,
+		MissingLayers: missingLayers,
+	}
+	json.NewEncoder(conn).Encode(response)
+
+	// Read the stream hash first
+	var streamHeader StreamHeader
+	if err := json.NewDecoder(conn).Decode(&streamHeader); err != nil {
+		fmt.Println("Failed to read stream header:", err)
+		return
+	}
+	// Save as a temporary pruned file
+	safeFilename := "incoming_pruned_" + streamHeader.PrunedHash[:8] + ".tar"
 	targetPath := filepath.Join(incomingDir, safeFilename)
 
 	file, err := os.Create(targetPath)
@@ -147,7 +235,7 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 		return
 	}
 
-	fmt.Printf("\nDownloading image to: %s\n", targetPath)
+	fmt.Printf("\nDownloading optimized payload to: %s\n", targetPath)
 
 	bytesReceived, err := io.Copy(file, conn)
 
@@ -168,8 +256,8 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 		return
 	}
 
-	if actualHash != req.Hash {
-		fmt.Printf("INTEGRITY FAILURE: Checksum mismatch!\nExpected: %s\nActual:   %s\n", req.Hash, actualHash)
+	if actualHash != streamHeader.PrunedHash {
+		fmt.Printf("INTEGRITY FAILURE: Checksum mismatch!\nExpected: %s\nActual:   %s\n", streamHeader.PrunedHash, actualHash)
 		fmt.Println("The payload was corrupted during network transit. Deleting file...")
 		os.Remove(targetPath)
 		return
@@ -178,10 +266,23 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	fmt.Println("Integrity verified. Payload is mathematically identical to source.")
 	fmt.Printf("Successfully received %d MB!\n", bytesReceived/1024/1024)
 
+	// Stitch the teaball back together by injecting the missing layers
+	reconstructedPath := filepath.Join(incomingDir, "ready_"+req.Hash[:8]+".tar")
+	layerCacheDir := filepath.Join(filepath.Dir(dbPath), "layers")
+
+	fmt.Println("Stitching cached layers back into payload...")
+	err = StitchTarball(targetPath, reconstructedPath, layerCacheDir, alreadyOwnedLayers)
+	if err != nil {
+		fmt.Println("Stitching failed:", err)
+		os.Remove(targetPath)
+		return
+	}
+	os.Remove(targetPath)
+
 	localArch := "linux/" + runtime.GOARCH
 	if req.ImageArch != "" && req.ImageArch != localArch && req.ImageArch != "unknown" {
 		fmt.Println("\n==================================================")
-		fmt.Println("ARCHITECTURE MISMATCH DETECTED ON ARRIVAL ⚠️")
+		fmt.Println("ARCHITECTURE MISMATCH DETECTED ON ARRIVAL ")
 		fmt.Println("==================================================")
 		fmt.Printf(" This image is built for '%s'.\n", req.ImageArch)
 		fmt.Printf(" Your machine is running '%s'.\n", localArch)
@@ -190,7 +291,22 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 		fmt.Printf("   docker run --platform %s %s\n", req.ImageArch, req.ImageName)
 		fmt.Println("\n==================================================")
 	}
-	// --------------------------------------
 
-	downloadedChan <- targetPath
+	//cache extract and ledger update
+	if len(missingLayers) > 0 {
+		fmt.Println("Extracting new layers to local cache...")
+		err = ExtractAndCacheLayers(reconstructedPath, layerCacheDir, req.Layers)
+		if err != nil {
+			fmt.Printf("Warning: Failed to cache new layers (future delta transfers may skip these): %v\n", err)
+		} else {
+			err = ledger.MarkLayersAsOwned(dbPath, missingLayers)
+			if err != nil {
+				fmt.Printf("Warning: Failed to update ledger cache database: %v\n", err)
+			} else {
+				fmt.Printf("Successfully cached %d new layers for future delta transfers.\n", len(missingLayers))
+			}
+		}
+	}
+	// Send the fully rebuilt tarball
+	downloadedChan <- reconstructedPath
 }

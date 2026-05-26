@@ -32,7 +32,7 @@ type HandshakeReport struct {
 
 // is the main entry point
 func ExportImage(config PreflightConfig) (string, string, error) {
-	fmt.Printf("🛫 Running pre-flight architecture checks for %s...\n", config.ImageName)
+	fmt.Printf("Running pre-flight architecture checks for %s...\n", config.ImageName)
 
 	report := runPreflightHandshake(config)
 	if !report.Passed {
@@ -67,11 +67,27 @@ func ExportImage(config PreflightConfig) (string, string, error) {
 	tarballPath, err := saveToTarball(imageToExport, config.ExportDir)
 
 	if isTempImage {
-		fmt.Printf("🧹 Engine Cleanup: Removing temporary cross-compiled image (%s)...\n", imageToExport)
+		fmt.Printf("Engine Cleanup: Removing temporary cross-compiled image (%s)...\n", imageToExport)
 		exec.Command("docker", "rmi", imageToExport).Run()
 	}
 
 	return tarballPath, finalArch, err
+}
+
+func GetImageLayers(imageName string) ([]string, error) {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return nil, err
+	}
+	defer cli.Close()
+
+	ctx := context.Background()
+	inspectData, _, err := cli.ImageInspectWithRaw(ctx, imageName)
+	if err != nil {
+		return nil, err
+	}
+
+	return inspectData.RootFS.Layers, nil
 }
 
 func runPreflightHandshake(config PreflightConfig) HandshakeReport {
