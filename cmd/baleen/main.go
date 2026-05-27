@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -300,6 +301,24 @@ func main() {
 						fmt.Printf("%-20s | %-12s | %-10s | %-30s | %-10s\n", displayTime, c.Direction, c.Status, displayImage, shortHash)
 					}
 					fmt.Println("--------------------------------------------------------------------------------------------------")
+				}
+			case "prune":
+				fmt.Println("Sweeping up old dangling Docker images...")
+
+				pruneCmd := exec.Command("docker", "image", "prune", "-f")
+				output, err := pruneCmd.CombinedOutput()
+
+				if err != nil {
+					fmt.Printf("Failed to run cleanup: %v\n", err)
+				} else {
+					outputStr := string(output)
+					fmt.Printf("\n%s\n", strings.TrimSpace(outputStr))
+
+					if strings.Contains(outputStr, "Total reclaimed space: 0B") {
+						fmt.Println("Note: No space was freed. Your old images are currently being used by active or stopped containers.")
+					} else {
+						fmt.Println("Cleanup complete.")
+					}
 				}
 
 			case "exit":

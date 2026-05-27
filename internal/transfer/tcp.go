@@ -1,17 +1,19 @@
 package transfer
 
 import (
+	"archive/tar"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"time"
 
 	"github.com/BGYKanishka/baleen-engine/internal/config"
-	"github.com/BGYKanishka/baleen-engine/internal/docker"
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
 )
 
@@ -63,9 +65,10 @@ func PushImage(targetIP string, port int, filePath string, imageName string, has
 	// Send the Metadata Handshake
 	fmt.Println("Sending transfer request metadata...")
 
-	layers, err := docker.GetImageLayers(imageName)
+	// Extract layers directly from the generated tarball payload
+	layers, err := getLayersFromTarball(filePath)
 	if err != nil {
-		fmt.Printf("Warning: Failed to extract layers for delta transfer: %v\n", err)
+		fmt.Printf("Warning: Failed to extract tarball layers: %v\n", err)
 	}
 
 	req := TransferRequest{
@@ -100,7 +103,9 @@ func PushImage(targetIP string, port int, filePath string, imageName string, has
 
 	// Prune the tarball locally
 	prunedFilePath := filePath + ".pruned"
-	err = PruneTarball(filePath, prunedFilePath, response.MissingLayers)
+
+	// Pass ALL layers AND missing layers
+	err = PruneTarball(filePath, prunedFilePath, layers, response.MissingLayers)
 	if err != nil {
 		return fmt.Errorf("failed to prune tarball: %w", err)
 	}
@@ -138,8 +143,8 @@ func PushImage(targetIP string, port int, filePath string, imageName string, has
 	}
 
 	// Calculate and print the total MB sent
-	mbSent := bytesSent / 1024 / 1024
-	fmt.Printf("Successfully pushed %d MB to %s!\n", mbSent, targetIP)
+	mbSent := float64(bytesSent) / 1024.0 / 1024.0
+	fmt.Printf("Successfully pushed %.2f MB to %s!\n", mbSent, targetIP)
 
 	return nil
 }
@@ -270,7 +275,7 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	layerCacheDir := filepath.Join(filepath.Dir(dbPath), "layers")
 
 	fmt.Println("Stitching cached layers back into payload...")
-	err = StitchTarball(targetPath, reconstructedPath, layerCacheDir, alreadyOwnedLayers)
+	err = StitchTarball(targetPath, reconstructedPath, layerCacheDir, req.Layers, alreadyOwnedLayers)
 	if err != nil {
 		fmt.Println("Stitching failed:", err)
 		os.Remove(targetPath)
@@ -309,4 +314,84 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	}
 	// Send the fully rebuilt tarball
 	downloadedChan <- reconstructedPath
+
+	go func(targetName string) {
+		time.Sleep(10 * time.Second)
+		tmpName := targetName + "-baleen-tmp"
+
+		// Ask Docker to retag the image
+		cmd := exec.Command("docker", "tag", tmpName, targetName)
+		if err := cmd.Run(); err == nil {
+			// Delete the temporary tag
+			exec.Command("docker", "rmi", tmpName).Run()
+
+			fmt.Printf("\n\nSuccessfully updated Docker tag for '%s'!\n", targetName)
+			fmt.Println("Tip: Old <none> fallback images were kept as backups. To free up space, type 'prune'.")
+			fmt.Print("\nbaleen> ")
+		}
+	}(req.ImageName)
+}
+
+func getLayersFromTarball(tarPath string) ([]string, error) {
+	file, err := os.Open(tarPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	tr := tar.NewReader(file)
+	var manifests []struct {
+		Config string   `json:"Config"`
+		Layers []string `json:"Layers"`
+	}
+	var configName string
+
+	// Find manifest.json and the main image config
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if hdr.Name == "manifest.json" {
+			if err := json.NewDecoder(tr).Decode(&manifests); err != nil {
+				return nil, err
+			}
+			// Find the main image manifest
+			max := 0
+			for _, m := range manifests {
+				if len(m.Layers) > max {
+					max = len(m.Layers)
+					configName = m.Config
+				}
+			}
+			break
+		}
+	}
+
+	if configName == "" {
+		return nil, fmt.Errorf("could not find main config in manifest")
+	}
+
+	//Rewind and parse the Config JSON to get the actual layer digests
+	file.Seek(0, 0)
+	tr = tar.NewReader(file)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if hdr.Name == configName {
+			var config struct {
+				RootFS struct {
+					DiffIDs []string `json:"diff_ids"`
+				} `json:"rootfs"`
+			}
+			if err := json.NewDecoder(tr).Decode(&config); err != nil {
+				return nil, err
+			}
+			return config.RootFS.DiffIDs, nil
+		}
+	}
+
+	return nil, fmt.Errorf("config file not found inside tarball")
 }

@@ -2,6 +2,7 @@ package transfer
 
 import (
 	"archive/tar"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -10,12 +11,44 @@ import (
 )
 
 // takes the incoming lightweight tarball, injects missing layers
-func StitchTarball(prunedPath string, reconstructedPath string, layerCacheDir string, missingDirs []string) error {
+func StitchTarball(prunedPath string, reconstructedPath string, layerCacheDir string, allDigests []string, alreadyOwnedDigests []string) error {
 	prunedFile, err := os.Open(prunedPath)
 	if err != nil {
 		return err
 	}
 	defer prunedFile.Close()
+
+	// Read manifest to map digests to physical paths
+	tr := tar.NewReader(prunedFile)
+	var manifests []struct {
+		Layers []string `json:"Layers"`
+	}
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if hdr.Name == "manifest.json" {
+			json.NewDecoder(tr).Decode(&manifests)
+			break
+		}
+	}
+
+	var mainLayers []string
+	for _, m := range manifests {
+		if len(m.Layers) > len(mainLayers) {
+			mainLayers = m.Layers
+		}
+	}
+
+	pathMap := make(map[string]string)
+	for i, physicalPath := range mainLayers {
+		pathMap[allDigests[i]] = physicalPath
+	}
+
+	//Copy ALL files exactly as they are
+	prunedFile.Seek(0, 0)
+	tr = tar.NewReader(prunedFile)
 
 	finalFile, err := os.Create(reconstructedPath)
 	if err != nil {
@@ -23,59 +56,42 @@ func StitchTarball(prunedPath string, reconstructedPath string, layerCacheDir st
 	}
 	defer finalFile.Close()
 
-	tr := tar.NewReader(prunedFile)
 	tw := tar.NewWriter(finalFile)
 	defer tw.Close()
 
-	// Copy everything from the incoming pruned tarball
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
 			break
 		}
-		if err != nil {
-			return err
-		}
-
-		if err := tw.WriteHeader(hdr); err != nil {
-			return err
-		}
-		if _, err := io.Copy(tw, tr); err != nil {
-			return err
-		}
+		tw.WriteHeader(hdr)
+		io.Copy(tw, tr)
 	}
 
-	// Inject the heavy layer.tar files
-	for _, dir := range missingDirs {
-		safeDigest := strings.ReplaceAll(dir, ":", "-")
+	// Inject the cached layers
+	for _, digest := range alreadyOwnedDigests {
+		safeDigest := strings.ReplaceAll(digest, ":", "-")
 		cachedLayerPath := filepath.Join(layerCacheDir, safeDigest, "layer.tar")
 
 		layerFile, err := os.Open(cachedLayerPath)
 		if err != nil {
-			return fmt.Errorf("CRITICAL: Local cache missing required layer %s: %w", safeDigest, err)
+			return err
 		}
 
 		stat, _ := layerFile.Stat()
+		correctInternalPath := pathMap[digest]
 
 		// Create a new tar header for the injected file
 		hdr := &tar.Header{
-			Name: filepath.Join(dir, "layer.tar"),
+			Name: filepath.ToSlash(correctInternalPath),
 			Mode: 0644,
 			Size: stat.Size(),
 		}
 
-		if err := tw.WriteHeader(hdr); err != nil {
-			layerFile.Close()
-			return err
-		}
-
+		tw.WriteHeader(hdr)
 		fmt.Printf("Stitching cached layer back into payload: %s\n", hdr.Name)
-		if _, err := io.Copy(tw, layerFile); err != nil {
-			layerFile.Close()
-			return err
-		}
+		io.Copy(tw, layerFile)
 		layerFile.Close()
 	}
-
 	return nil
 }
