@@ -31,6 +31,12 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("failed to setup directories: %w", err))
 	}
+	// Initialize the persistent Ledger DB
+	engineLedger, err := ledger.NewLedger(dbPath)
+	if err != nil {
+		panic(fmt.Errorf("failed to open ledger database: %w", err))
+	}
+	defer engineLedger.Close()
 
 	// Start Network Broadcaster & Listener
 	go network.StartBroadcaster(*nodeName, *port)
@@ -46,7 +52,7 @@ func main() {
 	approvalChan := make(chan transfer.ApprovalRequest)
 	downloadedChan := make(chan string)
 
-	go transfer.StartReceiver(*port, incomingDir, approvalChan, downloadedChan)
+	go transfer.StartReceiver(*port, incomingDir, approvalChan, downloadedChan, engineLedger)
 
 	go func() {
 		metadataPort := *port + 1
@@ -240,7 +246,7 @@ func main() {
 						Direction: "Exported",
 						Status:    "Completed",
 					}
-					ledger.RecordCommit(dbPath, commit)
+					engineLedger.RecordCommit(commit)
 					fmt.Println("Commit successfully written to local Ledger!")
 
 					err = transfer.PushImage(targetIP, targetPort, exportedFilePath, targetImage, hash, *nodeName, finalArch)
@@ -263,7 +269,7 @@ func main() {
 					fmt.Println("--------------------------------------------------")
 				}
 			case "history":
-				historyList, err := ledger.GetHistory(dbPath)
+				historyList, err := engineLedger.GetHistory()
 				if err != nil {
 					fmt.Println("Failed to read ledger:", err)
 					continue

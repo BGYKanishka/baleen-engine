@@ -151,7 +151,7 @@ type ApprovalRequest struct {
 }
 
 // runs a background TCP server to listen for incoming files
-func StartReceiver(port int, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan string) {
+func StartReceiver(port int, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan string, engineLedger *ledger.Ledger) {
 	address := fmt.Sprintf(":%d", port)
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
@@ -167,10 +167,10 @@ func StartReceiver(port int, incomingDir string, approvalChan chan ApprovalReque
 			continue
 		}
 
-		go handleIncomingTransfer(conn, incomingDir, approvalChan, downloadedChan)
+		go handleIncomingTransfer(conn, incomingDir, approvalChan, downloadedChan, engineLedger)
 	}
 }
-func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan string) {
+func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan string, engineLedger *ledger.Ledger) {
 	defer conn.Close()
 
 	var req TransferRequest
@@ -195,7 +195,7 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	// Figure out what layers we actually need
 	_, _, dbPath, err := config.SetupBaleenDirectory()
 	if err != nil {
-		fmt.Println("Error getting dbPath:", err)
+		fmt.Println("Error getting directories:", err)
 		return
 	}
 
@@ -203,8 +203,8 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	var alreadyOwnedLayers []string
 
 	for _, layerDigest := range req.Layers {
-		// Check your bbolt ledger
-		hasLayer := ledger.HasLayer(dbPath, layerDigest)
+		// Use the instance method instead of the static function
+		hasLayer := engineLedger.HasLayer(layerDigest)
 		if !hasLayer {
 			missingLayers = append(missingLayers, layerDigest)
 		} else {
@@ -238,7 +238,6 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	fmt.Printf("\nDownloading optimized payload to: %s\n", targetPath)
 
 	bytesReceived, err := io.Copy(file, conn)
-
 	file.Close()
 
 	if err != nil {
@@ -297,9 +296,10 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 		fmt.Println("Extracting new layers to local cache...")
 		err = ExtractAndCacheLayers(reconstructedPath, layerCacheDir, req.Layers)
 		if err != nil {
-			fmt.Printf("Warning: Failed to cache new layers (future delta transfers may skip these): %v\n", err)
+			fmt.Printf("Warning: Failed to cache new layers: %v\n", err)
 		} else {
-			err = ledger.MarkLayersAsOwned(dbPath, missingLayers)
+			// Use the instance method instead of the static function
+			err = engineLedger.MarkLayersAsOwned(missingLayers)
 			if err != nil {
 				fmt.Printf("Warning: Failed to update ledger cache database: %v\n", err)
 			} else {
