@@ -2,36 +2,33 @@ package transfer
 
 import (
 	"archive/tar"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
 )
 
 // reads a full Docker tarball and streams a lightweight version
 // skipping the heavy layer.tar files that the receiver already owns.
-func PruneTarball(inPath string, outPath string, skipDirs []string) error {
+func PruneTarball(inPath string, outPath string, allDigests []string, missingDigests []string) error {
 	inFile, err := os.Open(inPath)
 	if err != nil {
-		return fmt.Errorf("failed to open source tarball: %w", err)
+		return err
 	}
 	defer inFile.Close()
 
-	outFile, err := os.Create(outPath)
-	if err != nil {
-		return fmt.Errorf("failed to create pruned tarball: %w", err)
+	ownedMap := make(map[string]bool)
+	for _, d := range allDigests {
+		ownedMap[d] = true
 	}
-	defer outFile.Close()
+	for _, m := range missingDigests {
+		ownedMap[m] = false
+	}
 
 	tr := tar.NewReader(inFile)
-	tw := tar.NewWriter(outFile)
-	defer tw.Close()
-
-	// Convert slice to map for O(1) lookups
-	skipMap := make(map[string]bool)
-	for _, dir := range skipDirs {
-		skipMap[dir] = true
+	var manifests []struct {
+		Config string   `json:"Config"`
+		Layers []string `json:"Layers"`
 	}
 
 	for {
@@ -39,28 +36,55 @@ func PruneTarball(inPath string, outPath string, skipDirs []string) error {
 		if err == io.EOF {
 			break
 		}
-		if err != nil {
-			return fmt.Errorf("tar reading error: %w", err)
+		if hdr.Name == "manifest.json" {
+			json.NewDecoder(tr).Decode(&manifests)
+			break
+		}
+	}
+
+	// Safely find the main image manifest
+	var mainLayers []string
+	for _, m := range manifests {
+		if len(m.Layers) > len(mainLayers) {
+			mainLayers = m.Layers
+		}
+	}
+
+	if len(mainLayers) != len(allDigests) {
+		return fmt.Errorf("manifest layer count mismatch: cannot prune securely")
+	}
+
+	skipFiles := make(map[string]bool)
+	for i, physicalPath := range mainLayers {
+		if ownedMap[allDigests[i]] {
+			skipFiles[physicalPath] = true
+		}
+	}
+
+	inFile.Seek(0, 0)
+	tr = tar.NewReader(inFile)
+	outFile, err := os.Create(outPath)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	tw := tar.NewWriter(outFile)
+	defer tw.Close()
+
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
 		}
 
-		// Docker tar paths look like: "rand_id/layer.tar" or "rand_id/json"
-		parts := strings.Split(filepath.ToSlash(hdr.Name), "/")
-		rootDir := parts[0]
-
-		// If this is a layer.tar file in a directory we want to skip, don't write it to the output tarball
-		if len(parts) > 1 && skipMap[rootDir] && parts[1] == "layer.tar" {
+		if skipFiles[hdr.Name] {
 			fmt.Printf("Pruning duplicate layer payload: %s\n", hdr.Name)
 			continue
 		}
 
-		// Write the header and the file data
-		if err := tw.WriteHeader(hdr); err != nil {
-			return fmt.Errorf("failed to write tar header: %w", err)
-		}
-		if _, err := io.Copy(tw, tr); err != nil {
-			return fmt.Errorf("failed to write tar data: %w", err)
-		}
+		tw.WriteHeader(hdr)
+		io.Copy(tw, tr)
 	}
-
 	return nil
 }
