@@ -39,6 +39,11 @@ func main() {
 	}
 	defer engineLedger.Close()
 
+	fmt.Println("Generating ephemeral TLS certificates for secure transfers...")
+	tlsConfig, err := network.GenerateEphemeralTLS()
+	if err != nil {
+		panic(fmt.Errorf("failed to generate TLS config: %w", err))
+	}
 	// Start Network Broadcaster & Listener
 	go network.StartBroadcaster(*nodeName, *port)
 
@@ -53,7 +58,7 @@ func main() {
 	approvalChan := make(chan transfer.ApprovalRequest)
 	downloadedChan := make(chan string)
 
-	go transfer.StartReceiver(*port, incomingDir, approvalChan, downloadedChan, engineLedger)
+	go transfer.StartReceiver(*port, incomingDir, approvalChan, downloadedChan, engineLedger, tlsConfig)
 
 	go func() {
 		metadataPort := *port + 1
@@ -250,7 +255,7 @@ func main() {
 					engineLedger.RecordCommit(commit)
 					fmt.Println("Commit successfully written to local Ledger!")
 
-					err = transfer.PushImage(targetIP, targetPort, exportedFilePath, targetImage, hash, *nodeName, finalArch)
+					err = transfer.PushImage(targetIP, targetPort, exportedFilePath, targetImage, hash, *nodeName, finalArch, tlsConfig)
 					if err != nil {
 						fmt.Println("Push failed:", err)
 					}

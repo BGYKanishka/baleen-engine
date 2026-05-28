@@ -2,6 +2,7 @@ package transfer
 
 import (
 	"archive/tar"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -38,7 +39,7 @@ type StreamHeader struct {
 }
 
 // connects to the remote node / asks for permission / streams the file
-func PushImage(targetIP string, port int, filePath string, imageName string, hash string, author string, imageArch string) error {
+func PushImage(targetIP string, port int, filePath string, imageName string, hash string, author string, imageArch string, tlsConfig *tls.Config) error {
 	// Open the local .tar file
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -56,7 +57,7 @@ func PushImage(targetIP string, port int, filePath string, imageName string, has
 	address := net.JoinHostPort(targetIP, strconv.Itoa(port))
 	fmt.Printf("Connecting to remote node at %s...\n", address)
 
-	conn, err := net.Dial("tcp", address)
+	conn, err := tls.Dial("tcp", address, tlsConfig)
 	if err != nil {
 		return fmt.Errorf("connection failed: %w", err)
 	}
@@ -156,9 +157,9 @@ type ApprovalRequest struct {
 }
 
 // runs a background TCP server to listen for incoming files
-func StartReceiver(port int, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan string, engineLedger *ledger.Ledger) {
+func StartReceiver(port int, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan string, engineLedger *ledger.Ledger, tlsConfig *tls.Config) {
 	address := fmt.Sprintf(":%d", port)
-	listener, err := net.Listen("tcp", address)
+	listener, err := tls.Listen("tcp", address, tlsConfig)
 	if err != nil {
 		fmt.Printf("Failed to start receiver: %v\n", err)
 		return
