@@ -2,6 +2,7 @@ package transfer
 
 import (
 	"archive/tar"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -38,7 +39,7 @@ type StreamHeader struct {
 }
 
 // connects to the remote node / asks for permission / streams the file
-func PushImage(targetIP string, port int, filePath string, imageName string, hash string, author string, imageArch string) error {
+func PushImage(targetIP string, port int, filePath string, imageName string, hash string, author string, imageArch string, tlsConfig *tls.Config) error {
 	// Open the local .tar file
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -56,7 +57,7 @@ func PushImage(targetIP string, port int, filePath string, imageName string, has
 	address := net.JoinHostPort(targetIP, strconv.Itoa(port))
 	fmt.Printf("Connecting to remote node at %s...\n", address)
 
-	conn, err := net.Dial("tcp", address)
+	conn, err := tls.Dial("tcp", address, tlsConfig)
 	if err != nil {
 		return fmt.Errorf("connection failed: %w", err)
 	}
@@ -156,13 +157,7 @@ type ApprovalRequest struct {
 }
 
 // runs a background TCP server to listen for incoming files
-func StartReceiver(port int, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan string) {
-	address := fmt.Sprintf(":%d", port)
-	listener, err := net.Listen("tcp", address)
-	if err != nil {
-		fmt.Printf("Failed to start receiver: %v\n", err)
-		return
-	}
+func StartReceiver(listener net.Listener, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan string, engineLedger *ledger.Ledger) {
 	defer listener.Close()
 
 	for {
@@ -171,11 +166,10 @@ func StartReceiver(port int, incomingDir string, approvalChan chan ApprovalReque
 			fmt.Println("Failed to accept connection:", err)
 			continue
 		}
-
-		go handleIncomingTransfer(conn, incomingDir, approvalChan, downloadedChan)
+		go handleIncomingTransfer(conn, incomingDir, approvalChan, downloadedChan, engineLedger)
 	}
 }
-func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan string) {
+func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan string, engineLedger *ledger.Ledger) {
 	defer conn.Close()
 
 	var req TransferRequest
@@ -200,7 +194,7 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	// Figure out what layers we actually need
 	_, _, dbPath, err := config.SetupBaleenDirectory()
 	if err != nil {
-		fmt.Println("Error getting dbPath:", err)
+		fmt.Println("Error getting directories:", err)
 		return
 	}
 
@@ -208,8 +202,8 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	var alreadyOwnedLayers []string
 
 	for _, layerDigest := range req.Layers {
-		// Check your bbolt ledger
-		hasLayer := ledger.HasLayer(dbPath, layerDigest)
+		// Use the instance method instead of the static function
+		hasLayer := engineLedger.HasLayer(layerDigest)
 		if !hasLayer {
 			missingLayers = append(missingLayers, layerDigest)
 		} else {
@@ -243,7 +237,6 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	fmt.Printf("\nDownloading optimized payload to: %s\n", targetPath)
 
 	bytesReceived, err := io.Copy(file, conn)
-
 	file.Close()
 
 	if err != nil {
@@ -302,9 +295,10 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 		fmt.Println("Extracting new layers to local cache...")
 		err = ExtractAndCacheLayers(reconstructedPath, layerCacheDir, req.Layers)
 		if err != nil {
-			fmt.Printf("Warning: Failed to cache new layers (future delta transfers may skip these): %v\n", err)
+			fmt.Printf("Warning: Failed to cache new layers: %v\n", err)
 		} else {
-			err = ledger.MarkLayersAsOwned(dbPath, missingLayers)
+			// Use the instance method instead of the static function
+			err = engineLedger.MarkLayersAsOwned(missingLayers)
 			if err != nil {
 				fmt.Printf("Warning: Failed to update ledger cache database: %v\n", err)
 			} else {

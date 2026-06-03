@@ -1,9 +1,12 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io"
+	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -20,24 +23,65 @@ import (
 	"github.com/chzyer/readline"
 )
 
+// generate random name
+func generateNodeName() string {
+	adjectives := []string{"Aqua", "Swift", "Deep", "Sonic", "Lunar", "Mighty"}
+	nouns := []string{"Whale", "Orca", "Dolphin", "Ray", "Shark", "Baleen"}
+
+	// Seed the random number generator
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	return fmt.Sprintf("%s-%s-%d",
+		adjectives[rng.Intn(len(adjectives))],
+		nouns[rng.Intn(len(nouns))],
+		rng.Intn(1000))
+}
+
 func main() {
-	nodeName := flag.String("name", "Kanishka-MacBook", "Name of the Baleen Node")
-	port := flag.Int("port", 8080, "Port for the Baleen Node")
+	nodeName := flag.String("name", "auto", "Name of the Baleen Node (leave blank for random)")
+	port := flag.Int("port", 0, "Port for the Baleen Node (0 for auto-assign)")
 	flag.Parse()
 
-	fmt.Printf("Starting Baleen Engine as '%s' on Port %d...\n", *nodeName, *port)
+	finalName := *nodeName
+	if finalName == "auto" {
+		finalName = generateNodeName()
+	}
+
+	fmt.Println("Generating ephemeral TLS certificates for secure transfers...")
+	tlsConfig, err := network.GenerateEphemeralTLS()
+	if err != nil {
+		panic(fmt.Errorf("failed to generate TLS config: %w", err))
+	}
+
+	//Start the TLS Listener and grab the port
+	address := fmt.Sprintf(":%d", *port)
+	listener, err := tls.Listen("tcp", address, tlsConfig)
+	if err != nil {
+		panic(fmt.Errorf("failed to bind network port: %w", err))
+	}
+
+	//Extract the actual port
+	actualPort := listener.Addr().(*net.TCPAddr).Port
+
+	fmt.Printf("Starting Baleen Engine as '%s' on Port %d...\n", finalName, actualPort)
 
 	// Setup Environment
 	tempDir, incomingDir, dbPath, err := config.SetupBaleenDirectory()
 	if err != nil {
 		panic(fmt.Errorf("failed to setup directories: %w", err))
 	}
+	// Initialize the persistent Ledger DB
+	engineLedger, err := ledger.NewLedger(dbPath)
+	if err != nil {
+		panic(fmt.Errorf("failed to open ledger database: %w", err))
+	}
+	defer engineLedger.Close()
 
-	// Start Network Broadcaster & Listener
-	go network.StartBroadcaster(*nodeName, *port)
+	// Start Network Broadcaster using the REAL port
+	go network.StartBroadcaster(finalName, actualPort)
 
 	peerRegistry := network.NewPeerRegistry()
-	go network.DiscoverPeers(*nodeName, peerRegistry)
+	go network.DiscoverPeers(finalName, peerRegistry)
 
 	// background Checker!
 	go peerRegistry.StartHealthChecker()
@@ -47,10 +91,10 @@ func main() {
 	approvalChan := make(chan transfer.ApprovalRequest)
 	downloadedChan := make(chan string)
 
-	go transfer.StartReceiver(*port, incomingDir, approvalChan, downloadedChan)
+	go transfer.StartReceiver(listener, incomingDir, approvalChan, downloadedChan, engineLedger)
 
 	go func() {
-		metadataPort := *port + 1
+		metadataPort := actualPort + 1
 		http.HandleFunc("/architecture", func(w http.ResponseWriter, r *http.Request) {
 			arch := "linux/" + runtime.GOARCH
 			w.Write([]byte(arch))
@@ -241,10 +285,10 @@ func main() {
 						Direction: "Exported",
 						Status:    "Completed",
 					}
-					ledger.RecordCommit(dbPath, commit)
+					engineLedger.RecordCommit(commit)
 					fmt.Println("Commit successfully written to local Ledger!")
 
-					err = transfer.PushImage(targetIP, targetPort, exportedFilePath, targetImage, hash, *nodeName, finalArch)
+					err = transfer.PushImage(targetIP, targetPort, exportedFilePath, targetImage, hash, *nodeName, finalArch, tlsConfig)
 					if err != nil {
 						fmt.Println("Push failed:", err)
 					}
@@ -264,7 +308,7 @@ func main() {
 					fmt.Println("--------------------------------------------------")
 				}
 			case "history":
-				historyList, err := ledger.GetHistory(dbPath)
+				historyList, err := engineLedger.GetHistory()
 				if err != nil {
 					fmt.Println("Failed to read ledger:", err)
 					continue
