@@ -157,13 +157,7 @@ type ApprovalRequest struct {
 }
 
 // runs a background TCP server to listen for incoming files
-func StartReceiver(port int, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan string, engineLedger *ledger.Ledger, tlsConfig *tls.Config) {
-	address := fmt.Sprintf(":%d", port)
-	listener, err := tls.Listen("tcp", address, tlsConfig)
-	if err != nil {
-		fmt.Printf("Failed to start receiver: %v\n", err)
-		return
-	}
+func StartReceiver(listener net.Listener, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan string, engineLedger *ledger.Ledger) {
 	defer listener.Close()
 
 	for {
@@ -172,7 +166,6 @@ func StartReceiver(port int, incomingDir string, approvalChan chan ApprovalReque
 			fmt.Println("Failed to accept connection:", err)
 			continue
 		}
-
 		go handleIncomingTransfer(conn, incomingDir, approvalChan, downloadedChan, engineLedger)
 	}
 }

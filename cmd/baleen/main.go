@@ -1,9 +1,12 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io"
+	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -20,12 +23,47 @@ import (
 	"github.com/chzyer/readline"
 )
 
+// generate random name
+func generateNodeName() string {
+	adjectives := []string{"Aqua", "Swift", "Deep", "Sonic", "Lunar", "Mighty"}
+	nouns := []string{"Whale", "Orca", "Dolphin", "Ray", "Shark", "Baleen"}
+
+	// Seed the random number generator
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	return fmt.Sprintf("%s-%s-%d",
+		adjectives[rng.Intn(len(adjectives))],
+		nouns[rng.Intn(len(nouns))],
+		rng.Intn(1000))
+}
+
 func main() {
-	nodeName := flag.String("name", "Kanishka-MacBook", "Name of the Baleen Node")
-	port := flag.Int("port", 8080, "Port for the Baleen Node")
+	nodeName := flag.String("name", "auto", "Name of the Baleen Node (leave blank for random)")
+	port := flag.Int("port", 0, "Port for the Baleen Node (0 for auto-assign)")
 	flag.Parse()
 
-	fmt.Printf("Starting Baleen Engine as '%s' on Port %d...\n", *nodeName, *port)
+	finalName := *nodeName
+	if finalName == "auto" {
+		finalName = generateNodeName()
+	}
+
+	fmt.Println("Generating ephemeral TLS certificates for secure transfers...")
+	tlsConfig, err := network.GenerateEphemeralTLS()
+	if err != nil {
+		panic(fmt.Errorf("failed to generate TLS config: %w", err))
+	}
+
+	//Start the TLS Listener and grab the port
+	address := fmt.Sprintf(":%d", *port)
+	listener, err := tls.Listen("tcp", address, tlsConfig)
+	if err != nil {
+		panic(fmt.Errorf("failed to bind network port: %w", err))
+	}
+
+	//Extract the actual port
+	actualPort := listener.Addr().(*net.TCPAddr).Port
+
+	fmt.Printf("Starting Baleen Engine as '%s' on Port %d...\n", finalName, actualPort)
 
 	// Setup Environment
 	tempDir, incomingDir, dbPath, err := config.SetupBaleenDirectory()
@@ -39,16 +77,11 @@ func main() {
 	}
 	defer engineLedger.Close()
 
-	fmt.Println("Generating ephemeral TLS certificates for secure transfers...")
-	tlsConfig, err := network.GenerateEphemeralTLS()
-	if err != nil {
-		panic(fmt.Errorf("failed to generate TLS config: %w", err))
-	}
-	// Start Network Broadcaster & Listener
-	go network.StartBroadcaster(*nodeName, *port)
+	// Start Network Broadcaster using the REAL port
+	go network.StartBroadcaster(finalName, actualPort)
 
 	peerRegistry := network.NewPeerRegistry()
-	go network.DiscoverPeers(*nodeName, peerRegistry)
+	go network.DiscoverPeers(finalName, peerRegistry)
 
 	// background Checker!
 	go peerRegistry.StartHealthChecker()
@@ -58,10 +91,10 @@ func main() {
 	approvalChan := make(chan transfer.ApprovalRequest)
 	downloadedChan := make(chan string)
 
-	go transfer.StartReceiver(*port, incomingDir, approvalChan, downloadedChan, engineLedger, tlsConfig)
+	go transfer.StartReceiver(listener, incomingDir, approvalChan, downloadedChan, engineLedger)
 
 	go func() {
-		metadataPort := *port + 1
+		metadataPort := actualPort + 1
 		http.HandleFunc("/architecture", func(w http.ResponseWriter, r *http.Request) {
 			arch := "linux/" + runtime.GOARCH
 			w.Write([]byte(arch))
