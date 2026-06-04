@@ -1,9 +1,11 @@
 package ledger
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"sort"
@@ -137,4 +139,79 @@ func (l *Ledger) HasLayer(layer string) bool {
 		return nil
 	})
 	return hasLayer
+}
+
+// Rremoves a single commit
+func (l *Ledger) DeleteCommit(hashPrefix string) error {
+	return l.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte("Ledger"))
+		if bucket == nil {
+			return nil
+		}
+		if bucket.Get([]byte(hashPrefix)) != nil {
+			return bucket.Delete([]byte(hashPrefix))
+		}
+		prefixBytes := []byte(hashPrefix)
+		c := bucket.Cursor()
+
+		for k, _ := c.Seek(prefixBytes); k != nil && bytes.HasPrefix(k, prefixBytes); k, _ = c.Next() {
+			return c.Delete()
+		}
+
+		return fmt.Errorf("no commit found starting with '%s'", hashPrefix)
+	})
+}
+
+// Removes all commits older than the provided time
+func (l *Ledger) PruneHistoryOlderThan(cutoff time.Time) (int, error) {
+	deletedCount := 0
+
+	err := l.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte("Ledger"))
+		if bucket == nil {
+			return nil
+		}
+
+		c := bucket.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var commit Commit
+			if err := json.Unmarshal(v, &commit); err != nil {
+				continue
+			}
+			commitTime, err := time.Parse(time.RFC3339, commit.Timestamp)
+			if err == nil && commitTime.Before(cutoff) {
+				if err := c.Delete(); err != nil {
+					return err
+				}
+				deletedCount++
+			}
+		}
+		return nil
+	})
+
+	return deletedCount, err
+}
+
+// Wipes visual commit ledger and the internal known layers cache
+func (l *Ledger) ClearAllHistory() error {
+	return l.db.Update(func(tx *bbolt.Tx) error {
+		//visual Ledger bucket
+		err := tx.DeleteBucket([]byte("Ledger"))
+		if err != nil && err != bbolt.ErrBucketNotFound {
+			return err
+		}
+		_, err = tx.CreateBucketIfNotExists([]byte("Ledger"))
+		if err != nil {
+			return err
+		}
+
+		//internal memory of cached layers
+		err = tx.DeleteBucket([]byte("KnownLayers"))
+		if err != nil && err != bbolt.ErrBucketNotFound {
+			return err
+		}
+		_, err = tx.CreateBucketIfNotExists([]byte("KnownLayers"))
+
+		return err
+	})
 }
