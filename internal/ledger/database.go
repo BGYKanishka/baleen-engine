@@ -192,8 +192,8 @@ func (l *Ledger) PruneHistoryOlderThan(cutoff time.Time) (int, error) {
 	return deletedCount, err
 }
 
-// Wipes visual commit ledger and the internal known layers cache
-func (l *Ledger) ClearAllHistory() error {
+// Wipes the visual commit ledger but keeps the cache memory intact
+func (l *Ledger) ClearLedgerOnly() error {
 	return l.db.Update(func(tx *bbolt.Tx) error {
 		//visual Ledger bucket
 		err := tx.DeleteBucket([]byte("Ledger"))
@@ -201,12 +201,14 @@ func (l *Ledger) ClearAllHistory() error {
 			return err
 		}
 		_, err = tx.CreateBucketIfNotExists([]byte("Ledger"))
-		if err != nil {
-			return err
-		}
+		return err
+	})
+}
 
-		//internal memory of cached layers
-		err = tx.DeleteBucket([]byte("KnownLayers"))
+// Wipes the engine's internal memory of cached layers
+func (l *Ledger) ClearCacheMemory() error {
+	return l.db.Update(func(tx *bbolt.Tx) error {
+		err := tx.DeleteBucket([]byte("KnownLayers"))
 		if err != nil && err != bbolt.ErrBucketNotFound {
 			return err
 		}
