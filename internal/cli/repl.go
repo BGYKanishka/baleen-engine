@@ -119,8 +119,12 @@ func Start(ctx EngineContext) {
 				handlePush(parts, rl, inputChan, ctx)
 			case "peers":
 				handlePeers(ctx.PeerRegistry)
+				time.Sleep(50 * time.Millisecond)
+				rl.Refresh()
 			case "history":
 				handleHistory(ctx.EngineLedger)
+				time.Sleep(50 * time.Millisecond)
+				rl.Refresh()
 			case "gc":
 				handleGC(parts, ctx)
 			case "prune":
