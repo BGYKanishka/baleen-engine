@@ -3,6 +3,7 @@ package network
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 type PeerRegistry struct {
 	mu    sync.RWMutex
 	nodes map[string]string
+	Log   io.Writer
 }
 
 func NewPeerRegistry() *PeerRegistry {
@@ -61,8 +63,9 @@ func (pr *PeerRegistry) StartHealthChecker() {
 			conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 			if err != nil {
 				pr.RemovePeer(name)
-				fmt.Printf("\n[Network] Peer disconnected: %s\n", name)
-				fmt.Print("baleen> ")
+				if pr.Log != nil {
+					fmt.Fprintf(pr.Log, "[Network] Peer disconnected: %s\n", name)
+				}
 			} else {
 				conn.Close()
 			}
@@ -125,8 +128,9 @@ func DiscoverPeers(currentNodeName string, registry *PeerRegistry) {
 
 						prMap := registry.GetAllPeers()
 						if _, exists := prMap[entry.Instance]; !exists {
-							fmt.Printf("\n[Discovery] Found Remote Peer: %s (IP: %s)\n", entry.Instance, validAddress)
-							fmt.Print("baleen> ")
+							if registry.Log != nil {
+								fmt.Fprintf(registry.Log, "[Discovery] Found Remote Peer: %s (IP: %s)\n", entry.Instance, validAddress)
+							}
 						}
 
 						registry.AddPeer(entry.Instance, validAddress)

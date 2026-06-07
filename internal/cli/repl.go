@@ -42,8 +42,10 @@ func Start(ctx EngineContext) {
 		panic(err)
 	}
 	defer rl.Close()
+	ctx.PeerRegistry.Log = rl.Stdout()
 
 	inputChan := make(chan string)
+	syncChan := make(chan struct{})
 
 	// Feed readline input into our master channel
 	go func() {
@@ -56,6 +58,7 @@ func Start(ctx EngineContext) {
 				os.Exit(0)
 			}
 			inputChan <- line
+			<-syncChan
 		}
 	}()
 
@@ -106,11 +109,13 @@ func Start(ctx EngineContext) {
 
 				rl.SetPrompt("baleen> ")
 				rl.Refresh()
+				syncChan <- struct{}{}
 				continue
 			}
 
 			parts := strings.Split(input, " ")
 			if len(parts) == 0 || parts[0] == "" {
+				syncChan <- struct{}{}
 				continue
 			}
 
@@ -119,12 +124,8 @@ func Start(ctx EngineContext) {
 				handlePush(parts, rl, inputChan, ctx)
 			case "peers":
 				handlePeers(ctx.PeerRegistry)
-				time.Sleep(50 * time.Millisecond)
-				rl.Refresh()
 			case "history":
 				handleHistory(ctx.EngineLedger)
-				time.Sleep(50 * time.Millisecond)
-				rl.Refresh()
 			case "gc":
 				handleGC(parts, ctx)
 			case "prune":
@@ -135,6 +136,7 @@ func Start(ctx EngineContext) {
 			default:
 				fmt.Println("Unknown command. Try 'push <NODE_NAME> <IMAGE>' or 'exit'")
 			}
+			syncChan <- struct{}{}
 		}
 	}
 }
