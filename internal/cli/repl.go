@@ -287,37 +287,68 @@ func handleHistory(engineLedger *ledger.Ledger) {
 }
 func handleGC(parts []string, ctx EngineContext) {
 	engineLedger := ctx.EngineLedger
+
 	if len(parts) < 2 {
-		fmt.Println(" Usage: gc <all|old|rm> [args]")
-		fmt.Println("   all     : Wipes the entire transfer ledger history")
-		fmt.Println("   old [N] : Removes entries older than 7 days (or N days)")
-		fmt.Println("   rm <id> : Removes a specific commit by its short hash")
+		fmt.Println(" Usage: gc <all|old|short_hash> [-rm]")
+		fmt.Println("   all            : Wipes the visual transfer history")
+		fmt.Println("   old [days]     : Removes history older than 7 days (or specified days)")
+		fmt.Println("   <short_hash>   : Removes a specific commit by its short hash")
+		fmt.Println("   [-rm]          : Add this flag to the end to also delete physical files")
 		return
+	}
+	// Extract the -rm flag if the user provided it
+	removeCache := false
+	if parts[len(parts)-1] == "-rm" {
+		removeCache = true
+		parts = parts[:len(parts)-1]
+	}
+
+	if len(parts) < 2 {
+		fmt.Println("Invalid command. Try 'gc all -rm', 'gc old -rm', or 'gc <hash> -rm'")
+		return
+	}
+	// Helper function to safely delete specific physical .tar files
+	deletePhysicalFiles := func(hashFilter string, cutoff time.Time) int64 {
+		entries, err := os.ReadDir(ctx.TempDir)
+		if err != nil {
+			return 0
+		}
+		var freedSpace int64 = 0
+		for _, entry := range entries {
+			if strings.HasSuffix(entry.Name(), ".tar") {
+				if hashFilter != "" && !strings.Contains(entry.Name(), hashFilter) {
+					continue
+				}
+				filePath := filepath.Join(ctx.TempDir, entry.Name())
+				info, err := os.Stat(filePath)
+				if err != nil {
+					continue
+				}
+				if !cutoff.IsZero() && info.ModTime().After(cutoff) {
+					continue
+				}
+				freedSpace += info.Size()
+				os.RemoveAll(filePath)
+			}
+		}
+		return freedSpace / 1024 / 1024
 	}
 
 	switch parts[1] {
 	case "all":
-		err := engineLedger.ClearAllHistory()
+		err := engineLedger.ClearLedgerOnly()
 		if err != nil {
 			fmt.Printf("Failed to clear ledger: %v\n", err)
 			return
 		}
+		fmt.Print("Ledger history completely wiped.")
 
-		entries, err := os.ReadDir(ctx.TempDir)
-		if err == nil {
-			freedSpace := int64(0)
-			for _, entry := range entries {
-				if strings.HasSuffix(entry.Name(), ".tar") {
-					filePath := filepath.Join(ctx.TempDir, entry.Name())
-					if info, err := os.Stat(filePath); err == nil {
-						freedSpace += info.Size()
-					}
-					os.RemoveAll(filePath)
-				}
-			}
-			fmt.Printf("Ledger wiped and %d MB of physical cache deleted.\n", freedSpace/1024/1024)
+		if removeCache {
+			engineLedger.ClearCacheMemory()
+			freed := deletePhysicalFiles("", time.Time{})
+			fmt.Printf(" Internal cache reset and %d MB of physical data deleted.\n", freed)
 		} else {
-			fmt.Println("Ledger history wiped (cache folder was already empty).")
+			fmt.Println()
 		}
 	case "old":
 		days := 7
@@ -333,23 +364,31 @@ func handleGC(parts []string, ctx EngineContext) {
 		count, err := engineLedger.PruneHistoryOlderThan(cutoff)
 		if err != nil {
 			fmt.Printf("Failed to prune ledger: %v\n", err)
-		} else {
-			fmt.Printf("Ledger GC complete! Removed %d entries older than %d days.\n", count, days)
-		}
-	case "rm":
-		if len(parts) < 3 {
-			fmt.Println(" Usage: gc rm <short_hash>")
 			return
 		}
-		targetHash := parts[2]
+		fmt.Printf("Removed %d entries older than %d days.", count, days)
+
+		if removeCache {
+			freed := deletePhysicalFiles("", cutoff)
+			fmt.Printf(" Deleted %d MB of old physical data.\n", freed)
+		} else {
+			fmt.Println()
+		}
+	default:
+		targetHash := parts[1]
 		err := engineLedger.DeleteCommit(targetHash)
 		if err != nil {
 			fmt.Printf("Error: %v\n", err)
-		} else {
-			fmt.Printf("Commit '%s' successfully deleted from the ledger.\n", targetHash)
+			return
 		}
-	default:
-		fmt.Println("Unknown gc option. Use 'all', 'old', or 'rm'.")
+		fmt.Printf("Commit '%s' successfully deleted.", targetHash)
+
+		if removeCache {
+			freed := deletePhysicalFiles(targetHash, time.Time{})
+			fmt.Printf(" Deleted %d MB of associated physical data.\n", freed)
+		} else {
+			fmt.Println()
+		}
 	}
 }
 
