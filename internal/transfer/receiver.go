@@ -165,6 +165,19 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 			}
 		}
 	}
+	commit := ledger.Commit{
+		Hash:      req.Hash,
+		Image:     req.ImageName,
+		Author:    req.Author,
+		Timestamp: time.Now().Format(time.RFC3339),
+		Direction: "Imported",
+		Status:    "Completed",
+	}
+
+	err = engineLedger.RecordCommit(commit)
+	if err != nil {
+		fmt.Printf("Warning: Failed to write transfer to ledger: %v\n", err)
+	}
 	// Send the fully rebuilt tarball
 	downloadedChan <- reconstructedPath
 

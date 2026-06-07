@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,8 +42,10 @@ func Start(ctx EngineContext) {
 		panic(err)
 	}
 	defer rl.Close()
+	ctx.PeerRegistry.Log = rl.Stdout()
 
 	inputChan := make(chan string)
+	syncChan := make(chan struct{})
 
 	// Feed readline input into our master channel
 	go func() {
@@ -55,6 +58,7 @@ func Start(ctx EngineContext) {
 				os.Exit(0)
 			}
 			inputChan <- line
+			<-syncChan
 		}
 	}()
 
@@ -65,6 +69,7 @@ func Start(ctx EngineContext) {
 	fmt.Println("  push <NODE_NAME_OR_IP:PORT> <IMAGE> - Send a specific Docker image to target")
 	fmt.Println("  peers                               - Show active nodes on network")
 	fmt.Println("  history                             - View the transfer ledger")
+	fmt.Println("  gc <all|old>                        - Run garbage collection on the transfer ledger")
 	fmt.Println("  prune                               - Clean up old docker images")
 	fmt.Println("  exit                                - Shut down engine")
 
@@ -92,20 +97,25 @@ func Start(ctx EngineContext) {
 			input = strings.TrimSpace(input)
 
 			if pendingReq != nil {
+				rl.SetPrompt("")
+				rl.Refresh()
+
 				if strings.ToLower(input) == "y" {
 					pendingReq.Response <- true
 				} else {
 					pendingReq.Response <- false
 				}
 				pendingReq = nil
-				time.Sleep(100 * time.Millisecond)
+
 				rl.SetPrompt("baleen> ")
 				rl.Refresh()
+				syncChan <- struct{}{}
 				continue
 			}
 
 			parts := strings.Split(input, " ")
 			if len(parts) == 0 || parts[0] == "" {
+				syncChan <- struct{}{}
 				continue
 			}
 
@@ -116,6 +126,8 @@ func Start(ctx EngineContext) {
 				handlePeers(ctx.PeerRegistry)
 			case "history":
 				handleHistory(ctx.EngineLedger)
+			case "gc":
+				handleGC(parts, ctx)
 			case "prune":
 				handlePrune()
 			case "exit":
@@ -124,6 +136,7 @@ func Start(ctx EngineContext) {
 			default:
 				fmt.Println("Unknown command. Try 'push <NODE_NAME> <IMAGE>' or 'exit'")
 			}
+			syncChan <- struct{}{}
 		}
 	}
 }
@@ -277,6 +290,73 @@ func handleHistory(engineLedger *ledger.Ledger) {
 		fmt.Printf("%-20s | %-12s | %-10s | %-30s | %-10s\n", displayTime, c.Direction, c.Status, displayImage, shortHash)
 	}
 	fmt.Println("--------------------------------------------------------------------------------------------------")
+}
+func handleGC(parts []string, ctx EngineContext) {
+	engineLedger := ctx.EngineLedger
+	if len(parts) < 2 {
+		fmt.Println(" Usage: gc <all|old|rm> [args]")
+		fmt.Println("   all     : Wipes the entire transfer ledger history")
+		fmt.Println("   old [N] : Removes entries older than 7 days (or N days)")
+		fmt.Println("   rm <id> : Removes a specific commit by its short hash")
+		return
+	}
+
+	switch parts[1] {
+	case "all":
+		err := engineLedger.ClearAllHistory()
+		if err != nil {
+			fmt.Printf("Failed to clear ledger: %v\n", err)
+			return
+		}
+
+		entries, err := os.ReadDir(ctx.TempDir)
+		if err == nil {
+			freedSpace := int64(0)
+			for _, entry := range entries {
+				if strings.HasSuffix(entry.Name(), ".tar") {
+					filePath := filepath.Join(ctx.TempDir, entry.Name())
+					if info, err := os.Stat(filePath); err == nil {
+						freedSpace += info.Size()
+					}
+					os.RemoveAll(filePath)
+				}
+			}
+			fmt.Printf("Ledger wiped and %d MB of physical cache deleted.\n", freedSpace/1024/1024)
+		} else {
+			fmt.Println("Ledger history wiped (cache folder was already empty).")
+		}
+	case "old":
+		days := 7
+		if len(parts) >= 3 {
+			parsedDays, err := strconv.Atoi(parts[2])
+			if err != nil || parsedDays < 0 {
+				fmt.Println("Invalid timeline. Please provide a positive number of days.")
+				return
+			}
+			days = parsedDays
+		}
+		cutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
+		count, err := engineLedger.PruneHistoryOlderThan(cutoff)
+		if err != nil {
+			fmt.Printf("Failed to prune ledger: %v\n", err)
+		} else {
+			fmt.Printf("Ledger GC complete! Removed %d entries older than %d days.\n", count, days)
+		}
+	case "rm":
+		if len(parts) < 3 {
+			fmt.Println(" Usage: gc rm <short_hash>")
+			return
+		}
+		targetHash := parts[2]
+		err := engineLedger.DeleteCommit(targetHash)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+		} else {
+			fmt.Printf("Commit '%s' successfully deleted from the ledger.\n", targetHash)
+		}
+	default:
+		fmt.Println("Unknown gc option. Use 'all', 'old', or 'rm'.")
+	}
 }
 
 func handlePrune() {
