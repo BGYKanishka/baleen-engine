@@ -127,18 +127,22 @@ func recordAndPush(ctx EngineContext, exportedPath, image, arch, targetIP string
 	fmt.Printf("Streaming image to disk at: %s\n", exportedPath)
 
 	hash, _ := ledger.GenerateHash(exportedPath)
+	pushErr := transfer.PushImage(targetIP, targetPort, exportedPath, image, hash, ctx.NodeName, arch, ctx.TLSConfig)
+
+	status := "Completed"
+	if pushErr != nil {
+		status = "Failed"
+		fmt.Println("Push failed:", pushErr)
+	}
 	commit := ledger.Commit{
 		Hash:      hash,
 		Image:     image,
 		Author:    ctx.NodeName,
 		Timestamp: time.Now().Format(time.RFC3339),
 		Direction: "Exported",
-		Status:    "Completed",
+		Status:    status,
 	}
-	ctx.EngineLedger.RecordCommit(commit)
-	fmt.Println("Commit successfully written to local Ledger!")
-
-	if err := transfer.PushImage(targetIP, targetPort, exportedPath, image, hash, ctx.NodeName, arch, ctx.TLSConfig); err != nil {
-		fmt.Println("Push failed:", err)
+	if err := ctx.EngineLedger.RecordCommit(commit); err != nil {
+		fmt.Printf("Warning: Failed to write transfer to ledger: %v\n", err)
 	}
 }
