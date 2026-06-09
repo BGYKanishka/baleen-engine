@@ -12,103 +12,132 @@ import (
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
 )
 
-// connects to the remote node / asks for permission / streams the file
+// connects to the remote node, negotiates a delta transfer, and streams the pruned payload
 func PushImage(targetIP string, port int, filePath string, imageName string, hash string, author string, imageArch string, tlsConfig *tls.Config) error {
-	// Open the local .tar file
-	file, err := os.Open(filePath)
+	fileSize, layers, err := inspectTarball(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
-	}
-	defer file.Close()
-
-	// Get the exact file size for the handshake
-	fileInfo, err := file.Stat()
-	if err != nil {
-		return fmt.Errorf("failed to get file info: %w", err)
+		return err
 	}
 
-	// Connect to the remote Receiver via raw TCP
+	conn, err := dialReceiver(targetIP, port, tlsConfig)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	encoder := json.NewEncoder(conn)
+	decoder := json.NewDecoder(conn)
+
+	missingLayers, err := negotiate(encoder, decoder, imageName, hash, author, imageArch, fileSize, layers)
+	if err != nil {
+		return err
+	}
+
+	prunedPath, prunedHash, err := pruneAndHash(filePath, layers, missingLayers)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(prunedPath)
+
+	return streamPayload(encoder, conn, prunedPath, prunedHash, targetIP)
+}
+
+// opens the tarball, reads its size and layer digests
+func inspectTarball(filePath string) (int64, []string, error) {
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to get file info: %w", err)
+	}
+
+	layers, err := getLayersFromTarball(filePath)
+	if err != nil {
+		// Non-fatal: receiver will treat all layers as missing
+		fmt.Printf("Warning: Failed to extract tarball layers: %v\n", err)
+	}
+
+	return info.Size(), layers, nil
+}
+
+// opens a TLS connection to the remote node
+func dialReceiver(targetIP string, port int, tlsConfig *tls.Config) (*tls.Conn, error) {
 	address := net.JoinHostPort(targetIP, strconv.Itoa(port))
 	fmt.Printf("Connecting to remote node at %s...\n", address)
 
 	conn, err := tls.Dial("tcp", address, tlsConfig)
 	if err != nil {
-		return fmt.Errorf("connection failed: %w", err)
+		return nil, fmt.Errorf("connection failed: %w", err)
 	}
-	defer conn.Close()
+	return conn, nil
+}
 
-	// Send the Metadata Handshake
+// sends the transfer request and returns the list of layers the receiver is missing
+func negotiate(encoder *json.Encoder, decoder *json.Decoder, imageName string, hash string, author string, imageArch string, fileSize int64, layers []string) ([]string, error) {
 	fmt.Println("Sending transfer request metadata...")
-
-	// Extract layers directly from the generated tarball payload
-	layers, err := getLayersFromTarball(filePath)
-	if err != nil {
-		fmt.Printf("Warning: Failed to extract tarball layers: %v\n", err)
-	}
 
 	req := TransferRequest{
 		ImageName: imageName,
-		Size:      fileInfo.Size(),
+		Size:      fileSize,
 		Hash:      hash,
 		Author:    author,
 		ImageArch: imageArch,
 		Layers:    layers,
 	}
-
-	// use json Encoder to write the JSON directly into the network socket
-	encoder := json.NewEncoder(conn)
 	if err := encoder.Encode(req); err != nil {
-		return fmt.Errorf("failed to send handshake: %w", err)
+		return nil, fmt.Errorf("failed to send handshake: %w", err)
 	}
 
-	// Wait for the Receiver's Approval
 	fmt.Println("Waiting for receiver to approve the transfer...")
 
 	var response TransferResponse
-	decoder := json.NewDecoder(conn)
 	if err := decoder.Decode(&response); err != nil {
-		return fmt.Errorf("failed to read transfer response: %w", err)
+		return nil, fmt.Errorf("failed to read transfer response: %w", err)
 	}
 
 	if !response.Approved {
-		return fmt.Errorf("Transfer rejected by remote node")
+		return nil, fmt.Errorf("transfer rejected by remote node")
 	}
 
 	fmt.Printf("Request approved! Receiver is missing %d layers. Pruning tarball...\n", len(response.MissingLayers))
+	return response.MissingLayers, nil
+}
 
-	// Prune the tarball locally
-	prunedFilePath := filePath + ".pruned"
+// creates a pruned copy of the tarball and returns its path and hash
+func pruneAndHash(filePath string, layers []string, missingLayers []string) (string, string, error) {
+	prunedPath := filePath + ".pruned"
 
-	// Pass ALL layers AND missing layers
-	err = PruneTarball(filePath, prunedFilePath, layers, response.MissingLayers)
-	if err != nil {
-		return fmt.Errorf("failed to prune tarball: %w", err)
-	}
-	defer os.Remove(prunedFilePath)
-
-	// Hash the new pruned file
-	prunedHash, err := ledger.GenerateHash(prunedFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to hash pruned file: %w", err)
+	if err := PruneTarball(filePath, prunedPath, layers, missingLayers); err != nil {
+		return "", "", fmt.Errorf("failed to prune tarball: %w", err)
 	}
 
-	prunedFileInfo, _ := os.Stat(prunedFilePath)
+	prunedHash, err := ledger.GenerateHash(prunedPath)
+	if err != nil {
+		os.Remove(prunedPath)
+		return "", "", fmt.Errorf("failed to hash pruned file: %w", err)
+	}
 
-	// Send the Stream Header
+	return prunedPath, prunedHash, nil
+}
+
+// sends the stream header then copies the pruned file over the connection
+func streamPayload(encoder *json.Encoder, conn *tls.Conn, prunedPath string, prunedHash string, targetIP string) error {
+	info, err := os.Stat(prunedPath)
+	if err != nil {
+		return fmt.Errorf("failed to stat pruned file: %w", err)
+	}
+
 	header := StreamHeader{
 		PrunedHash: prunedHash,
-		PrunedSize: prunedFileInfo.Size(),
+		PrunedSize: info.Size(),
 	}
-	if err := json.NewEncoder(conn).Encode(header); err != nil {
+	if err := encoder.Encode(header); err != nil {
 		return fmt.Errorf("failed to send stream header: %w", err)
 	}
 
 	fmt.Println("Streaming optimized file data...")
 
-	// Stream the pruned file to the network
-	prunedFile, err := os.Open(prunedFilePath)
+	prunedFile, err := os.Open(prunedPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open pruned file: %w", err)
 	}
 	defer prunedFile.Close()
 
@@ -117,9 +146,6 @@ func PushImage(targetIP string, port int, filePath string, imageName string, has
 		return fmt.Errorf("file stream failed: %w", err)
 	}
 
-	// Calculate and print the total MB sent
-	mbSent := float64(bytesSent) / 1024.0 / 1024.0
-	fmt.Printf("Successfully pushed %.2f MB to %s!\n", mbSent, targetIP)
-
+	fmt.Printf("Successfully pushed %.2f MB to %s!\n", float64(bytesSent)/1024.0/1024.0, targetIP)
 	return nil
 }

@@ -22,21 +22,23 @@ func getLayersFromTarball(tarPath string) ([]string, error) {
 	}
 	var configName string
 
-	// Find manifest.json and the main image config
+	// Find manifest.json and pick the config for the image with the most layers
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
 			break
 		}
+		if err != nil {
+			return nil, err
+		}
 		if hdr.Name == "manifest.json" {
 			if err := json.NewDecoder(tr).Decode(&manifests); err != nil {
 				return nil, err
 			}
-			// Find the main image manifest
-			max := 0
+			maxLayers := 0
 			for _, m := range manifests {
-				if len(m.Layers) > max {
-					max = len(m.Layers)
+				if len(m.Layers) > maxLayers {
+					maxLayers = len(m.Layers)
 					configName = m.Config
 				}
 			}
@@ -48,24 +50,30 @@ func getLayersFromTarball(tarPath string) ([]string, error) {
 		return nil, fmt.Errorf("could not find main config in manifest")
 	}
 
-	//Rewind and parse the Config JSON to get the actual layer digests
-	file.Seek(0, 0)
+	// Rewind and parse the config JSON to get the actual layer digests
+	if _, err := file.Seek(0, 0); err != nil {
+		return nil, err
+	}
 	tr = tar.NewReader(file)
+
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
 			break
 		}
+		if err != nil {
+			return nil, err
+		}
 		if hdr.Name == configName {
-			var config struct {
+			var cfg struct {
 				RootFS struct {
 					DiffIDs []string `json:"diff_ids"`
 				} `json:"rootfs"`
 			}
-			if err := json.NewDecoder(tr).Decode(&config); err != nil {
+			if err := json.NewDecoder(tr).Decode(&cfg); err != nil {
 				return nil, err
 			}
-			return config.RootFS.DiffIDs, nil
+			return cfg.RootFS.DiffIDs, nil
 		}
 	}
 
