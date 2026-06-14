@@ -5,22 +5,33 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/grandcat/zeroconf"
 )
 
+// API Metadata struct (Invisible to CLI)
+type PeerMeta struct {
+	Source   string
+	Status   string
+	LastSeen time.Time
+}
+
 // safely stores active nodes to prevent race conditions
 type PeerRegistry struct {
-	mu    sync.RWMutex
-	nodes map[string]string
-	Log   io.Writer
+	mu       sync.RWMutex
+	nodes    map[string]string
+	metadata map[string]*PeerMeta
+	Log      io.Writer
 }
 
 func NewPeerRegistry() *PeerRegistry {
 	return &PeerRegistry{
-		nodes: make(map[string]string),
+		nodes:    make(map[string]string),
+		metadata: make(map[string]*PeerMeta),
 	}
 }
 
@@ -28,6 +39,14 @@ func (pr *PeerRegistry) AddPeer(name, address string) {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
 	pr.nodes[name] = address
+
+	// Track metadata for the API invisibly
+	if _, exists := pr.metadata[name]; !exists {
+		pr.metadata[name] = &PeerMeta{Source: "mdns", Status: "reachable", LastSeen: time.Now()}
+	} else {
+		pr.metadata[name].LastSeen = time.Now()
+		pr.metadata[name].Status = "reachable"
+	}
 }
 
 func (pr *PeerRegistry) GetAllPeers() map[string]string {
@@ -46,6 +65,7 @@ func (pr *PeerRegistry) RemovePeer(name string) {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
 	delete(pr.nodes, name)
+	delete(pr.metadata, name) // Clean up API metadata
 }
 
 // constantly pings known peers to ensure they are still online
@@ -68,6 +88,12 @@ func (pr *PeerRegistry) StartHealthChecker() {
 				}
 			} else {
 				conn.Close()
+				// Update last seen for the API
+				pr.mu.Lock()
+				if meta, exists := pr.metadata[name]; exists {
+					meta.LastSeen = time.Now()
+				}
+				pr.mu.Unlock()
 			}
 		}
 	}
@@ -147,4 +173,54 @@ func DiscoverPeers(currentNodeName string, registry *PeerRegistry) {
 			cancel()
 		}
 	}()
+}
+
+// Additional methods for API integration
+func (pr *PeerRegistry) AddCustomPeer(name, address, source string) {
+	pr.mu.Lock()
+	defer pr.mu.Unlock()
+	pr.nodes[name] = address
+	pr.metadata[name] = &PeerMeta{Source: source, Status: "reachable", LastSeen: time.Now()}
+}
+
+func LoadStaticPeers(pr *PeerRegistry) {
+	envPeers := os.Getenv("BALEEN_PEERS")
+	if envPeers == "" {
+		return
+	}
+	ips := strings.Split(envPeers, ",")
+	for i, ip := range ips {
+		trimmed := strings.TrimSpace(ip)
+		if trimmed != "" {
+			name := fmt.Sprintf("static-peer-%d", i+1)
+			pr.AddCustomPeer(name, trimmed, "static")
+		}
+	}
+}
+
+type APINode struct {
+	Address  string
+	Source   string
+	Status   string
+	LastSeen time.Time
+}
+
+func (pr *PeerRegistry) GetDetailedPeers() map[string]*APINode {
+	pr.mu.RLock()
+	defer pr.mu.RUnlock()
+
+	copyMap := make(map[string]*APINode)
+	for name, addr := range pr.nodes {
+		meta := pr.metadata[name]
+		if meta == nil {
+			meta = &PeerMeta{Source: "mdns", Status: "reachable", LastSeen: time.Now()}
+		}
+		copyMap[name] = &APINode{
+			Address:  addr,
+			Source:   meta.Source,
+			Status:   meta.Status,
+			LastSeen: meta.LastSeen,
+		}
+	}
+	return copyMap
 }
