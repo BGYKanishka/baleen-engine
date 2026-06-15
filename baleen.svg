@@ -1,0 +1,89 @@
+<svg width="100%" height="100%" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#152336" />
+      <stop offset="100%" stop-color="#0B131D" />
+    </linearGradient>
+
+    <!-- Docker Blue Gradient for right node & arrows -->
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1D9BF0" />
+      <stop offset="100%" stop-color="#0066FF" />
+    </linearGradient>
+
+    <!-- Cyan Gradient for left node & tail -->
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00F0FF" />
+      <stop offset="100%" stop-color="#0080FF" />
+    </linearGradient>
+
+    <!-- Glow Filter for energy flow effect -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <!-- Drop Shadow Filter for depth -->
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Background Squircle (Consistent across themes) -->
+  <rect width="512" height="512" rx="120" fill="url(#bgGrad)" />
+  
+  <!-- Subtle Grid Lines for tech aesthetic -->
+  <g stroke="#ffffff" opacity="0.03" stroke-width="1">
+    <path d="M 0 128 L 512 128 M 0 256 L 512 256 M 0 384 L 512 384" />
+    <path d="M 128 0 L 128 512 M 256 0 L 256 512 M 384 0 L 384 512" />
+  </g>
+
+  <!-- Graphic Group with Drop Shadow -->
+  <g filter="url(#shadow)">
+    <!-- Left Node (Container A) -->
+    <g transform="translate(106, 170)">
+      <rect width="80" height="80" rx="24" fill="#0B131D" stroke="url(#cyanGrad)" stroke-width="6" />
+      <rect x="22" y="24" width="36" height="6" rx="3" fill="#00F0FF" />
+      <rect x="22" y="40" width="36" height="6" rx="3" fill="#00F0FF" opacity="0.6" />
+      <rect x="22" y="56" width="36" height="6" rx="3" fill="#00F0FF" opacity="0.3" />
+    </g>
+
+    <!-- Right Node (Container B) -->
+    <g transform="translate(326, 170)">
+      <rect width="80" height="80" rx="24" fill="#0B131D" stroke="url(#blueGrad)" stroke-width="6" />
+      <rect x="22" y="24" width="36" height="6" rx="3" fill="#1D9BF0" />
+      <rect x="22" y="40" width="36" height="6" rx="3" fill="#1D9BF0" opacity="0.6" />
+      <rect x="22" y="56" width="36" height="6" rx="3" fill="#1D9BF0" opacity="0.3" />
+    </g>
+
+    <!-- P2P Connection Arrows -->
+    <!-- Top Arrow: Left to Right -->
+    <path d="M 198 190 L 300 190" stroke="url(#cyanGrad)" stroke-width="8" stroke-linecap="round" filter="url(#glow)" />
+    <polygon points="296,178 316,190 296,202" fill="#0080FF" />
+
+    <!-- Bottom Arrow: Right to Left -->
+    <path d="M 314 230 L 212 230" stroke="url(#blueGrad)" stroke-width="8" stroke-linecap="round" filter="url(#glow)" />
+    <polygon points="216,218 196,230 216,242" fill="#1D9BF0" />
+
+    <!-- Stylized Whale Tail -->
+    <g transform="translate(256, 310)" filter="url(#glow)">
+      <!-- Symmetrical whale tail path -->
+      <path d="M 0 50 
+               Q -60 50 -100 -10 
+               Q -70 -30 -40 -5 
+               Q -20 15 0 15 
+               Q 20 15 40 -5 
+               Q 70 -30 100 -10 
+               Q 60 50 0 50 Z" 
+            fill="url(#blueGrad)" />
+      
+      <!-- Water Droplets / Data Particles above the tail -->
+      <circle cx="-16" cy="-20" r="4" fill="#00F0FF" opacity="0.8" />
+      <circle cx="16" cy="-28" r="5" fill="#1D9BF0" opacity="0.9" />
+      <circle cx="0" cy="-40" r="3" fill="#00F0FF" opacity="0.6" />
+    </g>
+  </g>
+
+
+</svg>

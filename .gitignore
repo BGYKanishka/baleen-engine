@@ -27,3 +27,11 @@ go.work.sum
 # Environment files
 .env
 .env.*
+
+# Build artifacts
+build/
+*.exe
+
+# UI build artifacts (just in case)
+ui/dist/
+ui/node_modules/
