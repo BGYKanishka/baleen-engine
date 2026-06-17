@@ -2,13 +2,15 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { AppStatus } from '../types';
 
 export function useDaemon(ddClient: any) {
-  const [status, setStatus] = useState<AppStatus>('checking');
+  const [status, setStatus] = useState<AppStatus>('stopped');
   const [port, setPort] = useState<number | null>(null);
   const [token, setToken] = useState<string>('');
   const [logs, setLogs] = useState<string[]>([]);
   const [errorMsg, setErrorMsg] = useState<string>('');
   const isStartingRef = useRef(false);  // prevents double-start
+  const isIntentionalStopRef = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const processRef = useRef<any>(null);
 
   const addLog = useCallback((log: string) => {
     setLogs((prev) => [...prev, log].slice(-500));
@@ -18,6 +20,7 @@ export function useDaemon(ddClient: any) {
     // Prevent concurrent starts
     if (isStartingRef.current) return;
     isStartingRef.current = true;
+    isIntentionalStopRef.current = false;
 
     const newToken = crypto.randomUUID();
     setToken(newToken);
@@ -34,7 +37,7 @@ export function useDaemon(ddClient: any) {
     }, 30000);
 
     try {
-      ddClient.extension.host.cli.exec('baleen', ['daemon', '--token', newToken], {
+      processRef.current = ddClient.extension.host.cli.exec('baleen', ['daemon', '--token', newToken], {
         stream: {
           onOutput(data: { stdout?: string; stderr?: string }) {
             const line = data.stdout || data.stderr || '';
@@ -72,6 +75,13 @@ export function useDaemon(ddClient: any) {
             addLog(`[SYSTEM] Daemon closed with exit code ${exitCode}`);
             setPort(null);
             isStartingRef.current = false;
+
+            if (isIntentionalStopRef.current) {
+              isIntentionalStopRef.current = false;
+              setStatus('stopped');
+              return;
+            }
+
             if (exitCode === 0) {
               addLog(`[SYSTEM] Daemon exited cleanly, restarting in 1s...`);
               setTimeout(() => startDaemon(), 1000);
@@ -90,12 +100,22 @@ export function useDaemon(ddClient: any) {
     }
   }, [ddClient, addLog]);
 
+  const stopDaemon = useCallback(() => {
+    isIntentionalStopRef.current = true;
+    if (processRef.current) {
+      processRef.current.close();
+      processRef.current = null;
+    }
+    setPort(null);
+    setStatus('stopped');
+    addLog(`[SYSTEM] Daemon stopped by user.`);
+  }, [addLog]);
+
   useEffect(() => {
-    startDaemon();
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, []); 
+  }, []);
 
   // Heartbeat to keep daemon alive
   useEffect(() => {
@@ -108,5 +128,5 @@ export function useDaemon(ddClient: any) {
     return () => clearInterval(interval);
   }, [status, port, token, addLog]);
 
-  return { status, port, token, logs, errorMsg, startDaemon, setStatus };
+  return { status, port, token, logs, errorMsg, startDaemon, stopDaemon, setStatus };
 }

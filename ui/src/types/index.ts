@@ -29,4 +29,4 @@ export interface LedgerEntry {
   status: string;
 }
 
-export type AppStatus = 'checking' | 'setup' | 'running' | 'error';
+export type AppStatus = 'checking' | 'setup' | 'running' | 'error' | 'stopped';

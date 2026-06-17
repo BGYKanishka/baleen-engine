@@ -11,7 +11,7 @@ import LogsTab from './components/LogsTab';
 const ddClient = createDockerDesktopClient();
 
 export default function App() {
-  const { status, port, token, logs, errorMsg, startDaemon } = useDaemon(ddClient);
+  const { status, port, token, logs, errorMsg, startDaemon, stopDaemon } = useDaemon(ddClient);
   const [activeTab, setActiveTab] = useState('peers');
 
   if (status === 'checking') {
@@ -23,12 +23,12 @@ export default function App() {
       <div className="flex flex-col h-screen items-center justify-center space-y-4">
         <div className="text-red-500 font-bold text-xl">Daemon Connection Lost</div>
         <div className="bg-gray-800 p-4 rounded text-gray-300 font-mono text-sm max-w-lg text-center break-all">{errorMsg}</div>
-        <button onClick={startDaemon} className="bg-blue-600 px-4 py-2 rounded">Restart Daemon</button>
+        <button onClick={startDaemon} className="bg-blue-600 px-4 py-2 rounded">Start Daemon</button>
       </div>
     );
   }
 
-  if (!port) {
+  if (!port && status !== 'stopped') {
     return <div className="flex h-screen items-center justify-center text-gray-400">Booting host process...</div>;
   }
 
@@ -40,13 +40,33 @@ export default function App() {
           <span className="bg-blue-600 px-2 py-1 rounded text-sm shadow">Baleen Engine</span>
         </h1>
         <div className="flex items-center gap-4">
-          <span className="flex items-center gap-2 text-sm font-medium text-green-400">
-            <span className="h-2 w-2 bg-green-400 rounded-full animate-pulse"></span>
-            Daemon Running (Port {port})
-          </span>
-          <button onClick={startDaemon} className="text-sm border border-gray-600 hover:bg-gray-700 px-3 py-1 rounded transition">
-            Restart
-          </button>
+          {status === 'running' ? (
+            <span className="flex items-center gap-2 text-sm font-medium text-green-400">
+              <span className="h-2 w-2 bg-green-400 rounded-full animate-pulse"></span>
+              Daemon Running (Port {port})
+            </span>
+          ) : (
+            <span className="flex items-center gap-2 text-sm font-medium text-gray-400">
+              <span className="h-2 w-2 bg-gray-500 rounded-full"></span>
+              Daemon Stopped
+            </span>
+          )}
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={startDaemon} 
+              disabled={status === 'running'} 
+              className={`text-sm border px-3 py-1 rounded transition ${status === 'running' ? 'border-gray-700 text-gray-600 cursor-not-allowed' : 'border-green-600 hover:bg-green-900/30 text-green-400'}`}
+            >
+              Start
+            </button>
+            <button 
+              onClick={stopDaemon} 
+              disabled={status !== 'running'} 
+              className={`text-sm border px-3 py-1 rounded transition ${status !== 'running' ? 'border-gray-700 text-gray-600 cursor-not-allowed' : 'border-red-600 hover:bg-red-900/30 text-red-400'}`}
+            >
+              Stop
+            </button>
+          </div>
         </div>
       </header>
       
@@ -69,11 +89,19 @@ export default function App() {
 
       {/* Content Area */}
       <div className="flex-1 overflow-auto p-6 bg-gray-900">
-        {activeTab === 'peers' && <PeersTab port={port} token={token} />}
-        {activeTab === 'images' && <ImagesTab port={port} token={token} ddClient={ddClient} />}
-        {activeTab === 'transfers' && <TransfersTab port={port} token={token} />}
-        {activeTab === 'ledger' && <LedgerTab port={port} token={token} />}
-        {activeTab === 'logs' && <LogsTab logs={logs} />}
+        {status === 'stopped' ? (
+          <div className="flex h-full items-center justify-center text-gray-500 font-medium">
+            Daemon is stopped. Click Start to resume.
+          </div>
+        ) : (
+          <>
+            {activeTab === 'peers' && <PeersTab port={port!} token={token} />}
+            {activeTab === 'images' && <ImagesTab port={port!} token={token} ddClient={ddClient} />}
+            {activeTab === 'transfers' && <TransfersTab port={port!} token={token} />}
+            {activeTab === 'ledger' && <LedgerTab port={port!} token={token} />}
+            {activeTab === 'logs' && <LogsTab logs={logs} />}
+          </>
+        )}
       </div>
     </div>
   );
