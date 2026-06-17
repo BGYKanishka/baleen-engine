@@ -105,6 +105,7 @@ func StartDaemonServer(ctx cli.EngineContext, token string) {
 	actualPort := listener.Addr().(*net.TCPAddr).Port
 
 	fmt.Printf(`{"status": "ready", "port": %d}`+"\n", actualPort)
+	os.Stdout.Sync()
 
 	// Start a goroutine to monitor
 	go func() {
@@ -114,7 +115,7 @@ func StartDaemonServer(ctx cli.EngineContext, token string) {
 			idleTime := time.Since(lastActive)
 			activeMu.Unlock()
 
-			if idleTime > 15*time.Second {
+			if idleTime > 2*time.Minute {
 				// Extension closed or crashed. Clean up and exit.
 				os.Exit(0)
 			}
