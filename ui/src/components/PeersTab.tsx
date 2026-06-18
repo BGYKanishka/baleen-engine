@@ -18,7 +18,7 @@ export default function PeersTab({ port, token }: { port: number, token: string 
 
   useEffect(() => {
     fetchPeers();
-    const interval = setInterval(fetchPeers, 3000);
+    const interval = setInterval(fetchPeers, 1000); 
     return () => clearInterval(interval);
   }, [port, token]);
 

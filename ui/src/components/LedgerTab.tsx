@@ -4,11 +4,17 @@ import { LedgerEntry } from '../types';
 export default function LedgerTab({ port, token }: { port: number, token: string }) {
   const [history, setHistory] = useState<LedgerEntry[]>([]);
 
-  useEffect(() => {
+  const fetchLedger = () => {
     fetch(`http://127.0.0.1:${port}/api/ledger`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => setHistory(data || []))
       .catch(() => setHistory([]));
+  };
+
+  useEffect(() => {
+    fetchLedger();
+    const interval = setInterval(fetchLedger, 3000);
+    return () => clearInterval(interval);
   }, [port, token]);
 
   return (
@@ -32,9 +38,13 @@ export default function LedgerTab({ port, token }: { port: number, token: string
               <td className="px-4 py-3 text-gray-400">{new Date(record.timestamp).toLocaleString()}</td>
               <td className="px-4 py-3 capitalize">{record.direction}</td>
               <td className="px-4 py-3 font-medium font-mono">{record.image}</td>
-              <td className="px-4 py-3 font-mono">{record.peer}</td>
+              <td className="px-4 py-3 font-mono">{record.peer || 'Unknown'}</td>
               <td className="px-4 py-3">
-                <span className={record.status === 'success' ? 'text-green-400' : 'text-red-400'}>
+                <span className={
+                  record.status === 'Completed' ? 'text-green-400' : 
+                  record.status === 'Pending' ? 'text-yellow-400' : 
+                  'text-red-400'
+                }>
                   {record.status}
                 </span>
               </td>
