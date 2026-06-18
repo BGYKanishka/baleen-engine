@@ -20,7 +20,9 @@ useEffect(() => {
           
           img.RepoTags.forEach((repoTag: string) => {
             if (repoTag === '<none>:<none>' || repoTag.startsWith('<none>')) return;
-            const [name, tag] = repoTag.split(':');
+            const lastColonIndex = repoTag.lastIndexOf(':');
+            const name = lastColonIndex !== -1 ? repoTag.substring(0, lastColonIndex) : repoTag;
+            const tag = lastColonIndex !== -1 ? repoTag.substring(lastColonIndex + 1) : 'latest';
             
             const sizeMB = (img.Size / (1024 * 1024)).toFixed(2) + ' MB';
             
@@ -47,24 +49,47 @@ useEffect(() => {
     try {
       const res = await fetch(`http://127.0.0.1:${port}/api/peers`, { headers: { Authorization: `Bearer ${token}` } });
       const peerList: Peer[] = await res.json();
-      setPeers(peerList.filter(p => p.status === 'reachable'));
-      if (peerList.length > 0) setSelectedPeer(peerList[0].hostname);
+      const reachablePeers = peerList.filter(p => p.status === 'reachable');
+      setPeers(reachablePeers);
+      if (reachablePeers.length > 0) {
+        setSelectedPeer(reachablePeers[0].hostname);
+      } else {
+        setSelectedPeer('');
+      }
     } catch (e) {
       console.error("Failed to fetch peers for modal");
     }
   };
 
-  const confirmPush = async () => {
-    if (!selectedPeer) return;
+const confirmPush = async () => {
+    if (!selectedPeer) {
+      alert("No peer selected!");
+      return;
+    }
     try {
-      await fetch(`http://127.0.0.1:${port}/api/push`, {
+      console.log(`Sending push request for ${pushModal.image} to ${selectedPeer}...`);
+      
+      const res = await fetch(`http://127.0.0.1:${port}/api/push`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${token}` 
+        },
         body: JSON.stringify({ image: pushModal.image, peer: selectedPeer })
       });
+
+      // check if the Go backend rejected the request
+      if (!res.ok) {
+        const errorText = await res.text();
+        alert(`Backend rejected the push request.\nStatus: ${res.status}\nMessage: ${errorText}`);
+        return;
+      }
       setPushModal({ isOpen: false, image: '' });
-    } catch (e) {
-      console.error("Failed to trigger push");
+
+    } catch (e: any) {
+      // Handle network errors or other unexpected issues
+      alert(`Network Error: Failed to reach the backend API.\nDetails: ${e.message}`);
+      console.error("Push API Error:", e);
     }
   };
 
