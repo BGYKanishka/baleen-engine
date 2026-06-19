@@ -28,10 +28,16 @@ func PushImage(targetIP string, port int, filePath string, imageName string, has
 	encoder := json.NewEncoder(conn)
 	decoder := json.NewDecoder(conn)
 
+	// Tell the UI we're waiting for receiver confirmation
+	PublishStatus(imageName, targetIP, "push", "waiting for approval")
+
 	missingLayers, err := negotiate(encoder, decoder, imageName, hash, author, imageArch, fileSize, layers)
 	if err != nil {
+		PublishStatus(imageName, targetIP, "push", "rejected")
 		return err
 	}
+
+	PublishStatus(imageName, targetIP, "push", "pruning")
 
 	prunedPath, prunedHash, err := pruneAndHash(filePath, layers, missingLayers)
 	if err != nil {
@@ -39,7 +45,7 @@ func PushImage(targetIP string, port int, filePath string, imageName string, has
 	}
 	defer os.Remove(prunedPath)
 
-	return streamPayload(encoder, conn, prunedPath, prunedHash, targetIP)
+	return streamPayload(encoder, conn, prunedPath, prunedHash, targetIP, imageName)
 }
 
 // opens the tarball, reads its size and layer digests
@@ -119,7 +125,7 @@ func pruneAndHash(filePath string, layers []string, missingLayers []string) (str
 }
 
 // sends the stream header then copies the pruned file over the connection
-func streamPayload(encoder *json.Encoder, conn *tls.Conn, prunedPath string, prunedHash string, targetIP string) error {
+func streamPayload(encoder *json.Encoder, conn *tls.Conn, prunedPath string, prunedHash string, targetIP string, image string) error {
 	info, err := os.Stat(prunedPath)
 	if err != nil {
 		return fmt.Errorf("failed to stat pruned file: %w", err)
@@ -141,10 +147,29 @@ func streamPayload(encoder *json.Encoder, conn *tls.Conn, prunedPath string, pru
 	}
 	defer prunedFile.Close()
 
-	bytesSent, err := io.Copy(conn, prunedFile)
+	pw := newProgressWriter(conn, info.Size(), image, targetIP, "push")
+	bytesSent, err := io.Copy(pw, prunedFile)
 	if err != nil {
+		GlobalHub.Publish(ProgressEvent{
+			Direction: "push",
+			Image:     image,
+			Peer:      targetIP,
+			Progress:  float64(pw.sent.Load()) / float64(info.Size()) * 100,
+			Speed:     "",
+			Status:    "failed",
+		})
 		return fmt.Errorf("file stream failed: %w", err)
 	}
+
+	// Publish final 100% completed event
+	GlobalHub.Publish(ProgressEvent{
+		Direction: "push",
+		Image:     image,
+		Peer:      targetIP,
+		Progress:  100,
+		Speed:     "0.00 MB/s",
+		Status:    "completed",
+	})
 
 	fmt.Printf("Successfully pushed %.2f MB to %s!\n", float64(bytesSent)/1024.0/1024.0, targetIP)
 	return nil

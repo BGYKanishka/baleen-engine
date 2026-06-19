@@ -1,12 +1,15 @@
 package handlers
 
-import "net/http"
+import (
+	"net/http"
 
+	"github.com/BGYKanishka/baleen-engine/internal/transfer"
+)
+
+// Stream returns current transfer state as a JSON array
 func Stream() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-		// SSE loop goes here
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(transfer.GlobalHub.GetAll())
 	}
 }
