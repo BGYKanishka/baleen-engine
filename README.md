@@ -31,65 +31,71 @@ The Baleen "engine" serves as the core logic for this distributed distribution s
 ```mermaid
 graph TD
     %% Node Styling (Muted, professional colors)
-    classDef ui fill:#e2e8f0,stroke:#94a3b8,color:#0f172a;
+    classDef ui fill:#dbeafe,stroke:#93c5fd,color:#1e3a8a;
     classDef core fill:#f1f5f9,stroke:#cbd5e1,color:#0f172a;
     classDef db fill:#fef3c7,stroke:#fcd34d,color:#451a03;
     classDef ext fill:#dcfce7,stroke:#86efac,color:#14532d;
 
-    %% Subgraph Styling (Transparent backgrounds, subtle borders)
-    style Interfaces fill:none,stroke:#94a3b8,stroke-width:2px,stroke-dasharray: 5 5
-    style Core fill:none,stroke:#cbd5e1,stroke-width:2px,stroke-dasharray: 5 5
-    style External fill:none,stroke:#86efac,stroke-width:2px,stroke-dasharray: 5 5
+    %% Environment Boundaries Styling
+    style DockerExt fill:none,stroke:#38bdf8,stroke-width:2px,stroke-dasharray: 4 4
+    style HostOS fill:none,stroke:#94a3b8,stroke-width:2px,stroke-dasharray: 4 4
+    style Core fill:none,stroke:#cbd5e1,stroke-width:1px
+    style RemoteMachine fill:none,stroke:#86efac,stroke-width:2px,stroke-dasharray: 4 4
 
-    subgraph Interfaces [User Interfaces]
+    subgraph DockerExt [Docker Extension Environment]
         direction TB
-        UI[Docker Desktop Extension]:::ui
+        UI[Extension UI React]:::ui
+    end
+
+    subgraph HostOS [Host Machine]
+        direction TB
         CLI[CLI REPL]:::ui
-    end
-
-    subgraph Core [Baleen Core Engine]
-        direction TB
-        API[internal/api]:::core
-        CLI_PKG[internal/cli]:::core
-        Net[internal/network]:::core
-        Trans[internal/transfer]:::core
-        Doc[internal/docker]:::core
-        Ledger[(internal/ledger)]:::db
-        Config[internal/config]:::core
-    end
-
-    subgraph External [External Systems]
-        direction TB
+        
+        subgraph Core [Baleen Core Engine]
+            direction TB
+            API[API Daemon]:::core
+            CLI_PKG[CLI Orchestrator]:::core
+            Net[Network & Discovery]:::core
+            Trans[Delta Sync Manager]:::core
+            Doc[Docker Integrator]:::core
+            Ledger[(State Ledger)]:::db
+            Config[Configuration Manager]:::core
+        end
+        
         Daemon[Local Docker Daemon]:::ext
+    end
+
+    subgraph RemoteMachine [Remote Environment]
+        direction TB
         Peer[Remote Peer]:::ext
     end
 
-    UI -->|HTTP / SSE| API
+    %% Environment Crossing
+    UI --->|HTTP / SSE Bridge| API
+    
+    %% Internal Host connections
     CLI --> CLI_PKG
-
-    %% API and CLI share the EngineContext
     API -.->|shares context| CLI_PKG
     
-    %% CLI orchestrates the core subsystems
-    CLI_PKG --> Net
-    CLI_PKG --> Trans
     CLI_PKG --> Doc
     CLI_PKG --> Ledger
+    CLI_PKG --> Net
+    CLI_PKG --> Trans
     
-    %% Transfer relies on Config and Ledger
     Trans --> Config
     Trans --> Ledger
-
-    %% Longer arrows (--->) enforce a higher rank separation to push External Systems to the bottom
-    Net --->|mDNS| Peer
-    Trans --->|TLS Delta Stream| Peer
     Doc --->|Unix Socket| Daemon
+
+    %% Network Connections
+    Net ---->|mDNS| Peer
+    Trans ---->|TLS Delta Stream| Peer
 ```
 
 ### Core Components (`internal/`)
 
 - **`cli`**: Interactive REPL loop for pushing images, viewing peers, checking history, and pruning.
 - **`api`**: HTTP daemon server providing endpoints for the UI to monitor transfers, peers, images, and live logs (SSE).
+- **`config`**: Core node setup, application paths, and generated node names.
 - **`network`**: Peer discovery via `zeroconf` mDNS and secure connections via ephemeral RSA-2048 self-signed TLS certificates.
 - **`transfer`**: Delta stream engine that negotiates layer diffs, sending only missing layers and verifying integrity via SHA-256.
 - **`ledger`**: `bbolt` powered key-value store for commit history and local layer caching.
