@@ -8,10 +8,10 @@ export default function LogsTab({ logs }: { logs: string[] }) {
   }, [logs]);
 
   return (
-    <div className="bg-black border border-gray-700 rounded-lg h-full overflow-hidden flex flex-col">
-      <div className="bg-gray-800 px-4 py-2 border-b border-gray-700 flex justify-between items-center">
-        <span className="text-sm font-semibold">Daemon Process Logs</span>
-        <span className="text-xs text-gray-400">Live Output</span>
+    <div className="bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-700 rounded-lg h-full overflow-hidden flex flex-col">
+      <div className="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+        <span className="text-sm font-semibold text-gray-900 dark:text-white">Daemon Process Logs</span>
+        <span className="text-xs text-gray-500 dark:text-gray-400">Live Output</span>
       </div>
       <div className="flex-1 overflow-auto p-4 font-mono text-xs space-y-1">
         {logs.length === 0 ? (
@@ -20,7 +20,7 @@ export default function LogsTab({ logs }: { logs: string[] }) {
           logs.map((log, i) => {
             const isErr = log.includes('[STDERR]') || log.includes('[ERROR]');
             return (
-              <div key={i} className={`whitespace-pre-wrap break-all ${isErr ? 'text-red-400' : 'text-green-400'}`}>
+              <div key={i} className={`whitespace-pre-wrap break-all ${isErr ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
                 {log}
               </div>
             );

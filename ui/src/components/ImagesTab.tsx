@@ -90,9 +90,9 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
 
   return (
     <div className="relative">
-      <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
         <table className="w-full text-left">
-          <thead className="bg-gray-700 text-gray-300 text-sm">
+          <thead className="bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm">
             <tr>
               <th className="px-4 py-3">Image Name</th>
               <th className="px-4 py-3">Tag</th>
@@ -100,16 +100,16 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-700">
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {images.map((img, i) => (
-              <tr key={i} className="hover:bg-gray-750">
-                <td className="px-4 py-3 font-medium">{img.name}</td>
-                <td className="px-4 py-3 text-gray-400">{img.tag}</td>
-                <td className="px-4 py-3 text-gray-400">{img.size}</td>
+              <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-750">
+                <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{img.name}</td>
+                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{img.tag}</td>
+                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{img.size}</td>
                 <td className="px-4 py-3 text-right">
                   <button
                     onClick={() => openPushModal(img.name, img.tag)}
-                    className="bg-blue-600 hover:bg-blue-500 text-sm px-3 py-1 rounded transition"
+                    className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-3 py-1 rounded transition"
                   >
                     Push
                   </button>
@@ -121,21 +121,21 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
       </div>
 
       {pushModal.isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-          <div className="bg-gray-800 border border-gray-700 p-6 rounded-lg shadow-xl w-[420px] space-y-5">
-            <h3 className="text-lg font-bold">Push Image</h3>
+        <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-6 rounded-lg shadow-xl w-[420px] space-y-5">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Push Image</h3>
 
             {/* Image name */}
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Image</p>
-              <p className="font-mono text-blue-400 text-sm">{pushModal.image}</p>
+              <p className="font-mono text-blue-600 dark:text-blue-400 text-sm">{pushModal.image}</p>
             </div>
 
             {/* Peer selector */}
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Target Peer</p>
               <select
-                className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white"
+                className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
                 value={selectedPeer}
                 onChange={(e) => setSelectedPeer(e.target.value)}
               >
@@ -158,7 +158,7 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
                 placeholder="/path/to/your/project"
                 value={buildContext}
                 onChange={(e) => setBuildContext(e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white font-mono text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white font-mono text-sm placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-blue-500"
               />
               <p className="text-xs text-gray-600 mt-1">
                 If the receiver has a different CPU architecture, the engine will rebuild the image
@@ -170,14 +170,14 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
             <div className="flex justify-end gap-3 pt-1">
               <button
                 onClick={() => setPushModal({ isOpen: false, image: '' })}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded"
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-white rounded"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmPush}
                 disabled={!selectedPeer || pushing}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded font-medium flex items-center gap-2"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded text-white font-medium flex items-center gap-2"
               >
                 {pushing && (
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">

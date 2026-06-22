@@ -32,12 +32,12 @@ export default function TransfersTab({ port, token }: { port: number; token: str
 
   function statusColor(status: string) {
     switch (status) {
-      case 'completed':            return 'text-green-400';
-      case 'failed':               return 'text-red-400';
-      case 'rejected':             return 'text-red-400';
-      case 'waiting for approval': return 'text-yellow-400';
-      case 'pruning':              return 'text-yellow-400';
-      default:                     return 'text-gray-400';
+      case 'completed':            return 'text-green-600 dark:text-green-400';
+      case 'failed':               return 'text-red-600 dark:text-red-400';
+      case 'rejected':             return 'text-red-600 dark:text-red-400';
+      case 'waiting for approval': return 'text-yellow-600 dark:text-yellow-400';
+      case 'pruning':              return 'text-yellow-600 dark:text-yellow-400';
+      default:                     return 'text-gray-600 dark:text-gray-400';
     }
   }
 
@@ -55,25 +55,25 @@ export default function TransfersTab({ port, token }: { port: number; token: str
   return (
     <div className="space-y-4">
       {transfers.length === 0 ? (
-        <div className="bg-gray-800 border border-gray-700 p-8 rounded text-center text-gray-500">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-8 rounded text-center text-gray-500">
           No active transfers.
         </div>
       ) : (
         transfers.map((t) => (
           <div
             key={`${t.image}-${t.peer}`}
-            className="bg-gray-800 border border-gray-700 p-4 rounded-lg flex flex-col gap-2"
+            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4 rounded-lg flex flex-col gap-2"
           >
             <div className="flex justify-between items-center">
               <span className="font-medium flex items-center gap-2">
                 {t.direction === 'push' ? '⬆️ Push' : '⬇️ Pull'}
                 {' : '}
-                <span className="font-mono text-blue-400">{t.image}</span>
+                <span className="font-mono text-blue-600 dark:text-blue-400">{t.image}</span>
               </span>
-              <span className="text-sm text-gray-400 font-mono">{t.speed}</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400 font-mono">{t.speed}</span>
             </div>
 
-            <div className="w-full bg-gray-900 rounded-full h-2.5 border border-gray-700">
+            <div className="w-full bg-gray-100 dark:bg-gray-900 rounded-full h-2.5 border border-gray-200 dark:border-gray-700">
               <div
                 className={`h-2.5 rounded-full transition-all duration-300 ${barColor(t.status)}`}
                 style={{ width: `${Math.min(100, Math.max(0, t.progress))}%` }}
@@ -81,7 +81,7 @@ export default function TransfersTab({ port, token }: { port: number; token: str
             </div>
 
             <div className="flex justify-between text-xs">
-              <span className="text-gray-400">Peer: {t.peer}</span>
+              <span className="text-gray-500 dark:text-gray-400">Peer: {t.peer}</span>
               <span className={`capitalize font-medium ${statusColor(t.status)}`}>
                 {t.progress.toFixed(1)}% — {t.status}
               </span>

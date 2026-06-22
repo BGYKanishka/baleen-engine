@@ -60,14 +60,14 @@ export default function ApprovalNotification({ port, token }: { port: number; to
   if (!pending) return null;
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 w-80 bg-gray-800 border border-yellow-500/50 rounded-lg shadow-2xl shadow-black/60 overflow-hidden">
+    <div className="fixed bottom-5 right-5 z-50 w-80 bg-white dark:bg-gray-800 border border-yellow-500/50 rounded-lg shadow-2xl shadow-black/20 dark:shadow-black/60 overflow-hidden">
       {/* Top bar */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-yellow-500/10 border-b border-yellow-500/30">
+      <div className="flex items-center gap-2 px-3 py-2 bg-yellow-50 dark:bg-yellow-500/10 border-b border-yellow-500/30">
         <span className="relative flex h-2 w-2">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75" />
           <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-400" />
         </span>
-        <span className="text-yellow-400 text-xs font-semibold uppercase tracking-wide">
+        <span className="text-yellow-600 dark:text-yellow-400 text-xs font-semibold uppercase tracking-wide">
           Incoming Transfer
         </span>
       </div>
@@ -76,7 +76,7 @@ export default function ApprovalNotification({ port, token }: { port: number; to
       <div className="p-3 space-y-3">
         <div>
           <p className="text-xs text-gray-500 uppercase tracking-wider mb-0.5">Image</p>
-          <p className="font-mono text-blue-400 text-sm font-medium break-all leading-snug">
+          <p className="font-mono text-blue-600 dark:text-blue-400 text-sm font-medium break-all leading-snug">
             {pending.image}
           </p>
         </div>
@@ -84,23 +84,23 @@ export default function ApprovalNotification({ port, token }: { port: number; to
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
           <div>
             <p className="text-gray-500 uppercase tracking-wider mb-0.5">From</p>
-            <p className="text-gray-200 font-medium truncate">{pending.author}</p>
+            <p className="text-gray-900 dark:text-gray-200 font-medium truncate">{pending.author}</p>
           </div>
           <div>
             <p className="text-gray-500 uppercase tracking-wider mb-0.5">Size</p>
-            <p className="text-gray-200 font-medium">{formatBytes(pending.size)}</p>
+            <p className="text-gray-900 dark:text-gray-200 font-medium">{formatBytes(pending.size)}</p>
           </div>
           <div>
             <p className="text-gray-500 uppercase tracking-wider mb-0.5">Arch</p>
-            <p className="text-gray-200 font-mono">{pending.image_arch || 'unknown'}</p>
+            <p className="text-gray-900 dark:text-gray-200 font-mono">{pending.image_arch || 'unknown'}</p>
           </div>
           <div>
             <p className="text-gray-500 uppercase tracking-wider mb-0.5">Layers</p>
-            <p className="text-gray-200 font-medium">{pending.layers?.length ?? 0}</p>
+            <p className="text-gray-900 dark:text-gray-200 font-medium">{pending.layers?.length ?? 0}</p>
           </div>
         </div>
 
-        <p className="font-mono text-xs text-gray-500 bg-gray-900 px-2 py-1 rounded border border-gray-700 truncate">
+        <p className="font-mono text-xs text-gray-600 dark:text-gray-500 bg-gray-100 dark:bg-gray-900 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 truncate">
           {pending.hash.slice(0, 16)}…
         </p>
 
@@ -118,7 +118,7 @@ export default function ApprovalNotification({ port, token }: { port: number; to
           <button
             onClick={() => decide('reject')}
             disabled={acting !== null}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded bg-gray-700 hover:bg-red-800 active:bg-red-900 text-gray-200 hover:text-white text-xs font-semibold border border-gray-600 hover:border-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded bg-gray-200 dark:bg-gray-700 hover:bg-red-600 dark:hover:bg-red-800 active:bg-red-700 dark:active:bg-red-900 text-gray-800 dark:text-gray-200 hover:text-white dark:hover:text-white text-xs font-semibold border border-gray-300 dark:border-gray-600 hover:border-red-600 dark:hover:border-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {acting === 'reject'
               ? <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>

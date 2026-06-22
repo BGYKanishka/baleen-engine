@@ -28,14 +28,14 @@ class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col h-screen items-center justify-center bg-gray-900 text-white p-8">
-          <div className="bg-red-900/30 border border-red-500 rounded-lg p-6 max-w-3xl w-full">
-            <h1 className="text-xl font-bold text-red-500 mb-4">UI Crashed!</h1>
-            <div className="bg-black p-4 rounded overflow-auto text-sm font-mono text-red-300">
+        <div className="flex flex-col h-screen items-center justify-center bg-white dark:bg-gray-900 text-gray-900 dark:text-white p-8">
+          <div className="bg-red-50 dark:bg-red-900/30 border border-red-500 rounded-lg p-6 max-w-3xl w-full">
+            <h1 className="text-xl font-bold text-red-600 dark:text-red-500 mb-4">UI Crashed!</h1>
+            <div className="bg-white dark:bg-black p-4 rounded overflow-auto text-sm font-mono text-red-800 dark:text-red-300 border border-red-200 dark:border-transparent">
               <p className="font-bold mb-2">{this.state.error && this.state.error.toString()}</p>
               <pre>{this.state.errorInfo?.componentStack}</pre>
             </div>
-            <p className="mt-4 text-gray-400 text-sm">
+            <p className="mt-4 text-gray-600 dark:text-gray-400 text-sm">
               Copy this error and paste it in the chat!
             </p>
           </div>

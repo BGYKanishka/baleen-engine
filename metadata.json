@@ -2,7 +2,7 @@
   "icon": "baleen.svg",
   "ui": {
     "dashboard-tab": {
-      "title": "Baleen Engine",
+      "title": "Baleen",
       "root": "/ui",
       "src": "index.html"
     }

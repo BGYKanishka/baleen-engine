@@ -8,7 +8,7 @@ RUN npm run build
 
 # Create the minimal Extension image
 FROM alpine:latest
-LABEL org.opencontainers.image.title="Baleen Engine"
+LABEL org.opencontainers.image.title="Baleen"
 LABEL org.opencontainers.image.description="P2P Docker Image Sharing"
 LABEL org.opencontainers.image.vendor="Baleen"
 LABEL com.docker.desktop.extension.api.version="0.3.4"
