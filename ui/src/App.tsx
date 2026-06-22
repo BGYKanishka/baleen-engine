@@ -7,6 +7,7 @@ import ImagesTab from './components/ImagesTab';
 import TransfersTab from './components/TransfersTab';
 import LedgerTab from './components/LedgerTab';
 import LogsTab from './components/LogsTab';
+import ApprovalNotification from './components/ApprovalNotification';
 
 const ddClient = createDockerDesktopClient();
 
@@ -52,16 +53,16 @@ export default function App() {
             </span>
           )}
           <div className="flex items-center gap-2">
-            <button 
-              onClick={startDaemon} 
-              disabled={status === 'running'} 
+            <button
+              onClick={startDaemon}
+              disabled={status === 'running'}
               className={`text-sm border px-3 py-1 rounded transition ${status === 'running' ? 'border-gray-700 text-gray-600 cursor-not-allowed' : 'border-green-600 hover:bg-green-900/30 text-green-400'}`}
             >
               Start
             </button>
-            <button 
-              onClick={stopDaemon} 
-              disabled={status !== 'running'} 
+            <button
+              onClick={stopDaemon}
+              disabled={status !== 'running'}
               className={`text-sm border px-3 py-1 rounded transition ${status !== 'running' ? 'border-gray-700 text-gray-600 cursor-not-allowed' : 'border-red-600 hover:bg-red-900/30 text-red-400'}`}
             >
               Stop
@@ -69,7 +70,7 @@ export default function App() {
           </div>
         </div>
       </header>
-      
+
       {/* Navigation */}
       <div className="flex border-b border-gray-700 bg-gray-800 px-4 pt-3 flex-shrink-0 gap-1">
         {['peers', 'images', 'transfers', 'ledger', 'logs'].map((tab) => (
@@ -77,8 +78,8 @@ export default function App() {
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-5 py-2 capitalize font-semibold rounded-t-lg transition-colors duration-200 ${
-              activeTab === tab 
-                ? 'bg-gray-900 text-blue-400 border-t border-l border-r border-gray-700' 
+              activeTab === tab
+                ? 'bg-gray-900 text-blue-400 border-t border-l border-r border-gray-700'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-gray-750'
             }`}
           >
@@ -95,14 +96,19 @@ export default function App() {
           </div>
         ) : (
           <>
-            {activeTab === 'peers' && <PeersTab port={port!} token={token} />}
-            {activeTab === 'images' && <ImagesTab port={port!} token={token} ddClient={ddClient} />}
+            {activeTab === 'peers'     && <PeersTab port={port!} token={token} />}
+            {activeTab === 'images'    && <ImagesTab port={port!} token={token} ddClient={ddClient} />}
             {activeTab === 'transfers' && <TransfersTab port={port!} token={token} />}
-            {activeTab === 'ledger' && <LedgerTab port={port!} token={token} />}
-            {activeTab === 'logs' && <LogsTab logs={logs} />}
+            {activeTab === 'ledger'    && <LedgerTab port={port!} token={token} />}
+            {activeTab === 'logs'      && <LogsTab logs={logs} />}
           </>
         )}
       </div>
+
+      {/* Floating approval notification */}
+      {status === 'running' && port && (
+        <ApprovalNotification port={port} token={token} />
+      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/BGYKanishka/baleen-engine/internal/docker"
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
@@ -16,14 +17,41 @@ import (
 
 // EngineContext holds all the dependencies the CLI needs to execute commands
 type EngineContext struct {
-	NodeName       string
-	TempDir        string
-	ActualPort     int
-	PeerRegistry   *network.PeerRegistry
-	EngineLedger   *ledger.Ledger
-	TLSConfig      *tls.Config
-	ApprovalChan   chan transfer.ApprovalRequest
-	DownloadedChan chan string
+	NodeName        string
+	TempDir         string
+	ActualPort      int
+	PeerRegistry    *network.PeerRegistry
+	EngineLedger    *ledger.Ledger
+	TLSConfig       *tls.Config
+	ApprovalChan    chan transfer.ApprovalRequest
+	PendingApproval *PendingApprovalStore
+	DownloadedChan  chan string
+}
+
+type PendingApprovalStore struct {
+	mu  sync.Mutex
+	val *transfer.ApprovalRequest
+}
+
+func (s *PendingApprovalStore) Store(r transfer.ApprovalRequest) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.val = &r
+}
+
+func (s *PendingApprovalStore) Load() (transfer.ApprovalRequest, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.val == nil {
+		return transfer.ApprovalRequest{}, false
+	}
+	return *s.val, true
+}
+
+func (s *PendingApprovalStore) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.val = nil
 }
 
 func Start(ctx EngineContext) {
