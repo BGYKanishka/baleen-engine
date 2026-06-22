@@ -1,81 +1,75 @@
 import { useState, useEffect } from 'react';
 import { DockerImage, Peer } from '../types';
 
-export default function ImagesTab({ port, token, ddClient }: { port: number, token: string, ddClient: any }) {
+export default function ImagesTab({ port, token, ddClient }: { port: number; token: string; ddClient: any }) {
   const [images, setImages] = useState<DockerImage[]>([]);
   const [peers, setPeers] = useState<Peer[]>([]);
-  const [pushModal, setPushModal] = useState<{ isOpen: boolean, image: string }>({ isOpen: false, image: '' });
+  const [pushModal, setPushModal] = useState<{ isOpen: boolean; image: string }>({ isOpen: false, image: '' });
   const [selectedPeer, setSelectedPeer] = useState<string>('');
+  const [buildContext, setBuildContext] = useState<string>('');
+  const [pushing, setPushing] = useState(false);
 
-useEffect(() => {
+  useEffect(() => {
     const fetchLocalImages = async () => {
       try {
         // Use the native Docker API instead of CLI commands
         const localImages = await ddClient.docker.listImages();
-        
+
         const formattedImages: DockerImage[] = [];
-        
+
         localImages.forEach((img: any) => {
           if (!img.RepoTags || img.RepoTags.length === 0) return;
-          
+
           img.RepoTags.forEach((repoTag: string) => {
             if (repoTag === '<none>:<none>' || repoTag.startsWith('<none>')) return;
             const lastColonIndex = repoTag.lastIndexOf(':');
             const name = lastColonIndex !== -1 ? repoTag.substring(0, lastColonIndex) : repoTag;
             const tag = lastColonIndex !== -1 ? repoTag.substring(lastColonIndex + 1) : 'latest';
-            
-            const sizeMB = (img.Size / (1024 * 1024)).toFixed(2) + ' MB';
-            
             formattedImages.push({
               name: name || '<unknown>',
               tag: tag || 'latest',
-              size: sizeMB
+              size: (img.Size / (1024 * 1024)).toFixed(2) + ' MB',
             });
           });
         });
-        
+
         setImages(formattedImages);
       } catch (err) {
-        console.error("Failed to fetch native docker images", err);
+        console.error('Failed to fetch native docker images', err);
       }
     };
-    
+
     fetchLocalImages();
   }, [ddClient]);
 
   const openPushModal = async (imageName: string, imageTag: string) => {
     const fullImage = `${imageName}:${imageTag}`;
     setPushModal({ isOpen: true, image: fullImage });
+    setBuildContext('');
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/peers`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`http://127.0.0.1:${port}/api/peers`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const peerList: Peer[] = await res.json();
-      const reachablePeers = peerList.filter(p => p.status === 'reachable');
+      const reachablePeers = peerList.filter((p) => p.status === 'reachable');
       setPeers(reachablePeers);
-      if (reachablePeers.length > 0) {
-        setSelectedPeer(reachablePeers[0].hostname);
-      } else {
-        setSelectedPeer('');
-      }
-    } catch (e) {
-      console.error("Failed to fetch peers for modal");
+      setSelectedPeer(reachablePeers.length > 0 ? reachablePeers[0].hostname : '');
+    } catch {
+      console.error('Failed to fetch peers for modal');
     }
   };
 
-const confirmPush = async () => {
-    if (!selectedPeer) {
-      alert("No peer selected!");
-      return;
-    }
+  const confirmPush = async () => {
+    if (!selectedPeer) return;
+    setPushing(true);
     try {
-      console.log(`Sending push request for ${pushModal.image} to ${selectedPeer}...`);
-      
+      const body: Record<string, string> = { image: pushModal.image, peer: selectedPeer };
+      if (buildContext.trim()) body.buildContext = buildContext.trim();
+
       const res = await fetch(`http://127.0.0.1:${port}/api/push`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json', 
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({ image: pushModal.image, peer: selectedPeer })
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
       });
 
       // check if the Go backend rejected the request
@@ -89,7 +83,8 @@ const confirmPush = async () => {
     } catch (e: any) {
       // Handle network errors or other unexpected issues
       alert(`Network Error: Failed to reach the backend API.\nDetails: ${e.message}`);
-      console.error("Push API Error:", e);
+    } finally {
+      setPushing(false);
     }
   };
 
@@ -112,7 +107,10 @@ const confirmPush = async () => {
                 <td className="px-4 py-3 text-gray-400">{img.tag}</td>
                 <td className="px-4 py-3 text-gray-400">{img.size}</td>
                 <td className="px-4 py-3 text-right">
-                  <button onClick={() => openPushModal(img.name, img.tag)} className="bg-blue-600 hover:bg-blue-500 text-sm px-3 py-1 rounded transition">
+                  <button
+                    onClick={() => openPushModal(img.name, img.tag)}
+                    className="bg-blue-600 hover:bg-blue-500 text-sm px-3 py-1 rounded transition"
+                  >
                     Push
                   </button>
                 </td>
@@ -124,25 +122,70 @@ const confirmPush = async () => {
 
       {pushModal.isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-          <div className="bg-gray-800 border border-gray-700 p-6 rounded-lg shadow-xl w-96">
-            <h3 className="text-lg font-bold mb-4">Push Image</h3>
-            <p className="text-sm text-gray-300 mb-4">Pushing <span className="font-mono text-blue-400">{pushModal.image}</span> to peer:</p>
-            
-            <select 
-              className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white mb-6"
-              value={selectedPeer}
-              onChange={(e) => setSelectedPeer(e.target.value)}
-            >
-              <option value="" disabled>Select target peer...</option>
-              {peers.map(p => (
-                <option key={p.hostname} value={p.hostname}>{p.hostname} ({p.ip})</option>
-              ))}
-            </select>
+          <div className="bg-gray-800 border border-gray-700 p-6 rounded-lg shadow-xl w-[420px] space-y-5">
+            <h3 className="text-lg font-bold">Push Image</h3>
 
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setPushModal({ isOpen: false, image: '' })} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded">Cancel</button>
-              <button onClick={confirmPush} disabled={!selectedPeer} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 rounded font-medium">
-                Confirm Push
+            {/* Image name */}
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Image</p>
+              <p className="font-mono text-blue-400 text-sm">{pushModal.image}</p>
+            </div>
+
+            {/* Peer selector */}
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Target Peer</p>
+              <select
+                className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white"
+                value={selectedPeer}
+                onChange={(e) => setSelectedPeer(e.target.value)}
+              >
+                <option value="" disabled>Select target peer...</option>
+                {peers.map((p) => (
+                  <option key={p.hostname} value={p.hostname}>
+                    {p.hostname} ({p.ip})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Build context — optional, for cross-compilation */}
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">
+                Build Context <span className="normal-case text-gray-600">(optional — for cross-compilation)</span>
+              </p>
+              <input
+                type="text"
+                placeholder="/path/to/your/project"
+                value={buildContext}
+                onChange={(e) => setBuildContext(e.target.value)}
+                className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white font-mono text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500"
+              />
+              <p className="text-xs text-gray-600 mt-1">
+                If the receiver has a different CPU architecture, the engine will rebuild the image
+                using the Dockerfile found here. Leave blank to send as-is.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-1">
+              <button
+                onClick={() => setPushModal({ isOpen: false, image: '' })}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmPush}
+                disabled={!selectedPeer || pushing}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded font-medium flex items-center gap-2"
+              >
+                {pushing && (
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                  </svg>
+                )}
+                {pushing ? 'Queued…' : 'Confirm Push'}
               </button>
             </div>
           </div>

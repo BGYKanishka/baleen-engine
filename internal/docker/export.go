@@ -47,16 +47,17 @@ func ExportImage(config PreflightConfig) (string, string, error) {
 	if report.RequiresCrossBuild && !config.ForceRawExport {
 		dockerfilePath := filepath.Join(config.BuildContext, "Dockerfile")
 		if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
-			return "", "", fmt.Errorf("ERR_NO_DOCKERFILE")
+			fmt.Println("No Dockerfile found. Falling back to raw export (receiver will use emulation).")
+			config.ForceRawExport = true
+		} else {
+			resolvedImage, err := silentlyResolveArchitecture(config.ImageName, report.TargetPlatform, config.BuildContext)
+			if err != nil {
+				return "", "", fmt.Errorf("failed to resolve architecture: %w", err)
+			}
+			imageToExport = resolvedImage
+			isTempImage = true
+			finalArch = report.TargetPlatform
 		}
-
-		resolvedImage, err := silentlyResolveArchitecture(config.ImageName, report.TargetPlatform, config.BuildContext)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to resolve architecture: %w", err)
-		}
-		imageToExport = resolvedImage
-		isTempImage = true
-		finalArch = report.TargetPlatform
 	}
 
 	if config.ForceRawExport {
@@ -89,6 +90,10 @@ func GetImageLayers(imageName string) ([]string, error) {
 
 	return inspectData.RootFS.Layers, nil
 }
+func archOnly(platform string) string {
+	parts := strings.Split(platform, "/")
+	return parts[len(parts)-1]
+}
 
 func runPreflightHandshake(config PreflightConfig) HandshakeReport {
 	report := HandshakeReport{
@@ -109,20 +114,30 @@ func runPreflightHandshake(config PreflightConfig) HandshakeReport {
 	inspectData, _, err := cli.ImageInspectWithRaw(ctx, config.ImageName)
 
 	if err != nil {
+		// Image doesn't exist locally — will need a cross-build
 		report.RequiresCrossBuild = true
 		report.ActualPlatform = "unknown"
 	} else {
 		actualPlatform := inspectData.Os + "/" + inspectData.Architecture
 		report.ActualPlatform = actualPlatform
-		if actualPlatform != config.ExpectedTarget {
+		// Check for explicit architecture match
+		if archOnly(actualPlatform) != archOnly(config.ExpectedTarget) {
 			report.RequiresCrossBuild = true
+			fmt.Printf(
+				"Architecture mismatch: image is %s, target needs %s. Will cross-compile.\n",
+				actualPlatform, config.ExpectedTarget,
+			)
+		} else {
+			fmt.Printf(
+				"Architecture match: image %s is compatible with target %s.\n",
+				actualPlatform, config.ExpectedTarget,
+			)
 		}
 	}
 
 	return report
 }
 
-// performs a local cross-compilation build
 func silentlyResolveArchitecture(imageName string, targetPlatform string, buildContext string) (string, error) {
 	tempExportTag := fmt.Sprintf("%s-baleen-tmp", imageName)
 
@@ -131,11 +146,10 @@ func silentlyResolveArchitecture(imageName string, targetPlatform string, buildC
 	cmd := exec.Command("docker", "buildx", "build", "--platform", targetPlatform, "-t", tempExportTag, "--load", buildContext)
 
 	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = os.Stdout
 
-	buildErr := cmd.Run()
-	if buildErr != nil {
-		return "", fmt.Errorf("\nAutonomous cross-compilation failed: %w", buildErr)
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("autonomous cross-compilation failed: %w", err)
 	}
 
 	fmt.Printf("\nAutonomous cross-compilation successful.\n")
@@ -168,8 +182,7 @@ func saveToTarball(imageName string, exportDir string) (string, error) {
 	}
 	defer outFile.Close()
 
-	_, err = io.Copy(outFile, imageStream)
-	if err != nil {
+	if _, err = io.Copy(outFile, imageStream); err != nil {
 		return "", err
 	}
 
