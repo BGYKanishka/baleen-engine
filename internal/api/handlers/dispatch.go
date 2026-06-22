@@ -22,22 +22,28 @@ func Dispatch(ctx cli.EngineContext) http.HandlerFunc {
 		}
 
 		var payload struct {
-			Image string `json:"image"`
-			Peer  string `json:"peer"`
+			Image        string `json:"image"`
+			Peer         string `json:"peer"`
+			BuildContext string `json:"buildContext"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
+		buildContext := payload.BuildContext
+		if buildContext == "" {
+			buildContext = "."
+		}
+
 		w.WriteHeader(http.StatusAccepted)
 
-		go runExportPipeline(ctx, payload.Image, payload.Peer)
+		go runExportPipeline(ctx, payload.Image, payload.Peer, buildContext)
 	}
 }
 
 // handles the export and transfer of a Docker image to a specified peer
-func runExportPipeline(ctx cli.EngineContext, image, peer string) {
+func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) {
 	tempID := fmt.Sprintf("pending-%d", time.Now().UnixNano())
 	ctx.EngineLedger.RecordCommit(ledger.Commit{
 		Hash:      tempID,
@@ -70,8 +76,8 @@ func runExportPipeline(ctx cli.EngineContext, image, peer string) {
 		ImageName:      image,
 		ExpectedTarget: targetArch,
 		ExportDir:      ctx.TempDir,
-		BuildContext:   ".",
-		ForceRawExport: true,
+		BuildContext:   buildContext,
+		ForceRawExport: false,
 	}
 
 	exportedFilePath, arch, err := docker.ExportImage(cfg)

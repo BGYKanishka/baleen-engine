@@ -12,6 +12,7 @@ import (
 	"github.com/BGYKanishka/baleen-engine/internal/api"
 	"github.com/BGYKanishka/baleen-engine/internal/cli"
 	"github.com/BGYKanishka/baleen-engine/internal/config"
+	"github.com/BGYKanishka/baleen-engine/internal/docker"
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
 	"github.com/BGYKanishka/baleen-engine/internal/network"
 	"github.com/BGYKanishka/baleen-engine/internal/transfer"
@@ -96,6 +97,21 @@ func main() {
 
 	go transfer.StartReceiver(listener, incomingDir, approvalChan, downloadedChan, engineLedger)
 
+	// If we're in Daemon mode, we want to automatically load downloaded images into the local Docker Daemon
+	if isDaemon {
+		go func() {
+			for tarPath := range downloadedChan {
+				fmt.Println("Unpacking and loading image into Docker Daemon...")
+				if err := docker.LoadImage(tarPath); err != nil {
+					fmt.Printf("Warning: Failed to load image into Docker: %v\n", err)
+				} else {
+					fmt.Println("Image successfully loaded into Docker!")
+					os.Remove(tarPath)
+				}
+			}
+		}()
+	}
+
 	if !isDaemon {
 		go func() {
 			metadataPort := actualPort + 1
@@ -104,8 +120,7 @@ func main() {
 				w.Write([]byte(arch))
 			})
 
-			err := http.ListenAndServe(fmt.Sprintf(":%d", metadataPort), nil)
-			if err != nil && err != http.ErrServerClosed {
+			if err := http.ListenAndServe(fmt.Sprintf(":%d", metadataPort), nil); err != nil && err != http.ErrServerClosed {
 				fmt.Println("Metadata server error:", err)
 			}
 		}()
