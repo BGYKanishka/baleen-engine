@@ -42,6 +42,8 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	if !ok {
 		return
 	}
+	//publish receiving
+	PublishStatus(req.ImageName, req.Author, "pull", "waiting for approval")
 
 	_, _, dbPath, err := config.SetupBaleenDirectory()
 	if err != nil {
@@ -58,9 +60,14 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 
 	layerCacheDir := filepath.Join(filepath.Dir(dbPath), "layers")
 
-	targetPath, err := downloadPayload(decoder, conn, incomingDir)
+	//pass req metadata into downloadPayload
+	targetPath, err := downloadPayload(decoder, conn, incomingDir, req.ImageName, req.Author)
 	if err != nil {
 		fmt.Println(err)
+		GlobalHub.Publish(ProgressEvent{
+			Direction: "pull", Image: req.ImageName, Peer: req.Author,
+			Progress: 0, Speed: "", Status: "failed",
+		})
 		return
 	}
 
@@ -91,8 +98,12 @@ func receiveAndApprove(decoder *json.Decoder, encoder *json.Encoder, approvalCha
 	}
 
 	respChan := make(chan bool)
-	approvalChan <- ApprovalRequest{Req: req, Response: respChan}
+	approval := ApprovalRequest{Req: req, Response: respChan}
 
+	// Write into the channel for the store to pick up
+	approvalChan <- approval
+
+	// Block until approve/reject is called
 	if approved := <-respChan; !approved {
 		encoder.Encode(TransferResponse{Approved: false})
 		fmt.Println("\nTransfer rejected.")
@@ -115,7 +126,7 @@ func partitionLayers(layers []string, engineLedger *ledger.Ledger) (missing []st
 
 // reads the stream header then saves the incoming bytes to a temp file
 // verifying the hash before returning the path
-func downloadPayload(decoder *json.Decoder, conn net.Conn, incomingDir string) (string, error) {
+func downloadPayload(decoder *json.Decoder, conn net.Conn, incomingDir string, image, peer string) (string, error) {
 	var streamHeader StreamHeader
 	if err := decoder.Decode(&streamHeader); err != nil {
 		return "", fmt.Errorf("failed to read stream header: %w", err)
@@ -130,12 +141,21 @@ func downloadPayload(decoder *json.Decoder, conn net.Conn, incomingDir string) (
 	}
 
 	fmt.Printf("\nDownloading optimized payload to: %s\n", targetPath)
-	bytesReceived, err := io.Copy(file, conn)
+
+	//track progress
+	pw := newProgressWriter(file, streamHeader.PrunedSize, image, peer, "pull")
+	bytesReceived, err := io.Copy(pw, conn)
 	file.Close()
 	if err != nil {
 		os.Remove(targetPath)
 		return "", fmt.Errorf("file stream failed: %w", err)
 	}
+
+	//publish completed
+	GlobalHub.Publish(ProgressEvent{
+		Direction: "pull", Image: image, Peer: peer,
+		Progress: 100, Speed: "0.00 MB/s", Status: "completed",
+	})
 
 	fmt.Println("Verifying payload integrity...")
 	actualHash, err := ledger.GenerateHash(targetPath)
@@ -146,10 +166,13 @@ func downloadPayload(decoder *json.Decoder, conn net.Conn, incomingDir string) (
 
 	if actualHash != streamHeader.PrunedHash {
 		os.Remove(targetPath)
-		return "", fmt.Errorf("INTEGRITY FAILURE: Checksum mismatch!\nExpected: %s\nActual:   %s\nThe payload was corrupted during network transit. Deleting file...", streamHeader.PrunedHash, actualHash)
+		GlobalHub.Publish(ProgressEvent{
+			Direction: "pull", Image: image, Peer: peer,
+			Progress: 0, Speed: "", Status: "failed",
+		})
+		return "", fmt.Errorf("INTEGRITY FAILURE: checksum mismatch\nExpected: %s\nActual:   %s", streamHeader.PrunedHash, actualHash)
 	}
 
-	fmt.Println("Integrity verified. Payload is mathematically identical to source.")
 	fmt.Printf("Successfully received %d MB!\n", bytesReceived/1024/1024)
 	return targetPath, nil
 }

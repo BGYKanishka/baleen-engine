@@ -113,14 +113,15 @@ func main() {
 
 	// Build the context and hand off execution to the CLI
 	cliContext := cli.EngineContext{
-		NodeName:       finalName,
-		TempDir:        tempDir,
-		ActualPort:     actualPort,
-		PeerRegistry:   peerRegistry,
-		EngineLedger:   engineLedger,
-		TLSConfig:      tlsConfig,
-		ApprovalChan:   approvalChan,
-		DownloadedChan: downloadedChan,
+		NodeName:        finalName,
+		TempDir:         tempDir,
+		ActualPort:      actualPort,
+		PeerRegistry:    peerRegistry,
+		EngineLedger:    engineLedger,
+		TLSConfig:       tlsConfig,
+		ApprovalChan:    approvalChan,
+		PendingApproval: &cli.PendingApprovalStore{},
+		DownloadedChan:  downloadedChan,
 	}
 
 	if isDaemon {

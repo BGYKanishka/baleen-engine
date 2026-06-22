@@ -13,6 +13,11 @@ import (
 
 func StartDaemonServer(ctx cli.EngineContext, token string) {
 	lastActive = time.Now()
+	go func() {
+		for approval := range ctx.ApprovalChan {
+			ctx.PendingApproval.Store(approval)
+		}
+	}()
 
 	mux := http.NewServeMux()
 
@@ -24,6 +29,9 @@ func StartDaemonServer(ctx cli.EngineContext, token string) {
 	mux.HandleFunc("/api/ledger", withHeartbeat(handlers.History(ctx)))
 	mux.HandleFunc("/api/push", withHeartbeat(handlers.Dispatch(ctx)))
 	mux.HandleFunc("/api/stream", withHeartbeat(handlers.Stream()))
+	mux.HandleFunc("/api/pending", withHeartbeat(handlers.Pending(ctx)))
+	mux.HandleFunc("/api/approve", withHeartbeat(handlers.Approve(ctx)))
+	mux.HandleFunc("/api/reject", withHeartbeat(handlers.Reject(ctx)))
 
 	handler := corsAndAuthMiddleware(mux, token)
 
