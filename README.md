@@ -10,7 +10,7 @@ Baleen Engine is a high-speed, local-first, peer-to-peer Docker image sharing en
 
 *   **Peer-to-Peer Transfers:** Direct, high-speed TCP socket transfers over ephemeral TLS — no internet connection or cloud registry required.
 *   **Autonomous Discovery:** Built-in `zeroconf` seamlessly handles machine discovery on your local network.
-*   **Immutable Ledger:** Uses a Git-like historical ledger powered by `bbolt` to track image synchronization history and cache layers.
+*   **Immutable Ledger:** Uses a historical ledger powered by `bbolt` to track image synchronization history and cache layers.
 *   **Delta Transfer Engine:** Smart layer pruning and stitching. Only the layers that the peer is missing are transferred.
 *   **Smart Architecture Detection:** Automatically handles multi-architecture image resolution across different platforms via `docker buildx`.
 *   **Dual-Mode Interface:** Run as a lightweight background daemon with an interactive hybrid CLI, or use the fully integrated Docker Desktop Extension with a visual React-based UI.
@@ -98,10 +98,10 @@ graph TD
 - **`config`**: Core node setup, application paths, and generated node names.
 - **`network`**: Peer discovery via `zeroconf` mDNS and secure connections via ephemeral RSA-2048 self-signed TLS certificates.
 - **`transfer`**: Delta stream engine that negotiates layer diffs, sending only missing layers and verifying integrity via SHA-256.
-- **`ledger`**: `bbolt` powered key-value store for commit history and local layer caching.
+- **`ledger`**: `bbolt` powered key-value store for history and local layer caching.
 - **`docker`**: Integration with Docker SDK to inspect, export, buildx (cross-compile), and load images.
 
 ### Docker Desktop Extension (`ui/`)
 
-A React-based UI that runs inside Docker Desktop, communicating with the Baleen background daemon. It visualizes local peers, tracks real-time transfers, and displays the immutable ledger of sharing history.
+A React-based UI that runs inside Docker Desktop, communicating with the Baleen background daemon. It visualizes local peers, tracks real-time transfers, and displays the ledger of sharing history.
 
