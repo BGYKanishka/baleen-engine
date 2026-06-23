@@ -80,7 +80,7 @@ export default function PeersTab({ port, token }: { port: number, token: string 
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {peers.map((peer, i) => (
-              <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-750">
+              <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{peer.hostname}</td>
                 <td className="px-4 py-3 font-mono text-sm text-gray-600 dark:text-gray-400">{peer.ip}</td>
                 <td className="px-4 py-3">

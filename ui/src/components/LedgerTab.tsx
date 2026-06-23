@@ -34,7 +34,7 @@ export default function LedgerTab({ port, token }: { port: number, token: string
             <tr><td colSpan={5} className="text-center py-8 text-gray-500">No ledger entries found.</td></tr>
           )}
           {history.map((record, i) => (
-            <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-750 text-sm">
+            <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700 text-sm">
               <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{new Date(record.timestamp).toLocaleString()}</td>
               <td className="px-4 py-3 capitalize">{record.direction}</td>
               <td className="px-4 py-3 font-medium font-mono text-gray-900 dark:text-gray-200">{record.image}</td>

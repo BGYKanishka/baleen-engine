@@ -102,7 +102,7 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {images.map((img, i) => (
-              <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-750">
+              <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{img.name}</td>
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{img.tag}</td>
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{img.size}</td>
