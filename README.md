@@ -10,7 +10,7 @@ Baleen Engine is a high-speed, local-first, peer-to-peer Docker image sharing en
 
 *   **Peer-to-Peer Transfers:** Direct, high-speed TCP socket transfers over ephemeral TLS — no internet connection or cloud registry required.
 *   **Autonomous Discovery:** Built-in `zeroconf` seamlessly handles machine discovery on your local network.
-*   **Immutable Ledger:** Uses a historical ledger powered by `bbolt` to track image synchronization history and cache layers.
+*   **Ledger:** Uses a historical ledger powered by `bbolt` to track image synchronization history and cache layers.
 *   **Delta Transfer Engine:** Smart layer pruning and stitching. Only the layers that the peer is missing are transferred.
 *   **Smart Architecture Detection:** Automatically handles multi-architecture image resolution across different platforms via `docker buildx`.
 *   **Dual-Mode Interface:** Run as a lightweight background daemon with an interactive hybrid CLI, or use the fully integrated Docker Desktop Extension with a visual React-based UI.
@@ -84,7 +84,7 @@ graph TD
     
     Trans --> Config
     Trans --> Ledger
-    Doc --->|Unix Socket| Daemon
+    Doc --->|Unix Socket / Named Pipe| Daemon
 
     %% Network Connections
     Net ---->|mDNS| Peer
