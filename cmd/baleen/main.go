@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"runtime"
 
 	"github.com/BGYKanishka/baleen-engine/internal/api"
@@ -93,20 +94,33 @@ func main() {
 
 	// Create channels for our inputs
 	approvalChan := make(chan transfer.ApprovalRequest)
-	downloadedChan := make(chan string)
+	downloadedChan := make(chan transfer.DownloadResult)
 
 	go transfer.StartReceiver(listener, incomingDir, approvalChan, downloadedChan, engineLedger)
 
 	// If we're in Daemon mode, we want to automatically load downloaded images into the local Docker Daemon
 	if isDaemon {
 		go func() {
-			for tarPath := range downloadedChan {
+			for result := range downloadedChan {
 				fmt.Println("Unpacking and loading image into Docker Daemon...")
-				if err := docker.LoadImage(tarPath); err != nil {
+				if err := docker.LoadImage(result.Path); err != nil {
 					fmt.Printf("Warning: Failed to load image into Docker: %v\n", err)
 				} else {
 					fmt.Println("Image successfully loaded into Docker!")
-					os.Remove(tarPath)
+
+					// Tag the image only if it was cross-compiled and has the -tmp suffix
+					tmpName := result.ImageName + "-baleen-tmp"
+					if err := exec.Command("docker", "inspect", tmpName).Run(); err == nil {
+						if err := exec.Command("docker", "tag", tmpName, result.ImageName).Run(); err != nil {
+							fmt.Printf("Error: Failed to tag image %s: %v\n", result.ImageName, err)
+						} else {
+							if err := exec.Command("docker", "rmi", tmpName).Run(); err != nil {
+								fmt.Printf("Warning: Failed to remove temporary tag %s: %v\n", tmpName, err)
+							}
+						}
+					}
+
+					os.Remove(result.Path)
 				}
 			}
 		}()

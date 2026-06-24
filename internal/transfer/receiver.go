@@ -6,7 +6,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"time"
@@ -15,8 +14,14 @@ import (
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
 )
 
+// DownloadResult holds the path to the downloaded tarball and the final image name.
+type DownloadResult struct {
+	Path      string
+	ImageName string
+}
+
 // runs a background TCP server to listen for incoming files
-func StartReceiver(listener net.Listener, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan string, engineLedger *ledger.Ledger) {
+func StartReceiver(listener net.Listener, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan DownloadResult, engineLedger *ledger.Ledger) {
 	defer listener.Close()
 
 	for {
@@ -30,7 +35,7 @@ func StartReceiver(listener net.Listener, incomingDir string, approvalChan chan 
 }
 
 // reads a full Docker tarball and streams
-func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan string, engineLedger *ledger.Ledger) {
+func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan DownloadResult, engineLedger *ledger.Ledger) {
 	defer conn.Close()
 
 	// Use a single decoder for the entire connection lifetime to avoid
@@ -85,9 +90,10 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 
 	recordCommit(req, engineLedger)
 
-	downloadedChan <- reconstructedPath
-
-	go scheduleDockerRetag(req.ImageName)
+	downloadedChan <- DownloadResult{
+		Path:      reconstructedPath,
+		ImageName: req.ImageName,
+	}
 }
 
 // decodes the incoming TransferRequest, asks for user approval
@@ -241,16 +247,3 @@ func recordCommit(req TransferRequest, engineLedger *ledger.Ledger) {
 	}
 }
 
-// waits for Docker to finish loading the image
-func scheduleDockerRetag(imageName string) {
-	time.Sleep(10 * time.Second)
-	tmpName := imageName + "-baleen-tmp"
-
-	cmd := exec.Command("docker", "tag", tmpName, imageName)
-	if err := cmd.Run(); err == nil {
-		exec.Command("docker", "rmi", tmpName).Run()
-		fmt.Printf("\n\nSuccessfully updated Docker tag for '%s'!\n", imageName)
-		fmt.Println("Tip: Old <none> fallback images were kept as backups. To free up space, type 'prune'.")
-		fmt.Print("\nbaleen> ")
-	}
-}
