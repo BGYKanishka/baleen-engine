@@ -3,14 +3,13 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/BGYKanishka/baleen-engine/internal/cli"
 	"github.com/BGYKanishka/baleen-engine/internal/docker"
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
+	"github.com/BGYKanishka/baleen-engine/internal/network"
 	"github.com/BGYKanishka/baleen-engine/internal/transfer"
 )
 
@@ -68,9 +67,20 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 		}
 	}()
 
-	targetIP, port := resolveTarget(ctx, peer)
+	targetIP, port, resolveErr := network.ResolveTargetAddress(ctx.PeerRegistry, peer)
+	if resolveErr != nil {
+		ctx.EngineLedger.RecordCommit(ledger.Commit{
+			Hash:      tempID,
+			Image:     image,
+			Author:    ctx.NodeName,
+			Timestamp: time.Now().Format(time.RFC3339),
+			Direction: "Exported",
+			Status:    fmt.Sprintf("Failed: %v", resolveErr),
+		})
+		return
+	}
 
-	targetArch := detectArchitecture(targetIP, port)
+	targetArch := network.DetectRemoteArch(targetIP, port)
 
 	cfg := docker.PreflightConfig{
 		ImageName:      image,
@@ -115,39 +125,4 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 		Direction: "Exported",
 		Status:    status,
 	})
-}
-
-// resolves the peer name to an IP and port
-func resolveTarget(ctx cli.EngineContext, peer string) (string, int) {
-	targetIP := peer
-	peers := ctx.PeerRegistry.GetAllPeers()
-	if resolvedIP, exists := peers[peer]; exists {
-		targetIP = resolvedIP
-	}
-
-	port := 8080
-	if strings.Contains(targetIP, ":") {
-		parts := strings.Split(targetIP, ":")
-		targetIP = parts[0]
-		fmt.Sscanf(parts[1], "%d", &port)
-	}
-
-	return targetIP, port
-}
-
-// probes the target node for its CPU architecture
-func detectArchitecture(targetIP string, port int) string {
-	client := http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(fmt.Sprintf("http://%s:%d/architecture", targetIP, port+1))
-	if err != nil {
-		return "linux/amd64"
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil || len(bodyBytes) == 0 {
-		return "linux/amd64"
-	}
-
-	return strings.TrimSpace(string(bodyBytes))
 }

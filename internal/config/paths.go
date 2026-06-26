@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 )
 
+// MetadataPortOffset is the offset added to the main port to determine the metadata server port
+const MetadataPortOffset = 1
+
 // creates the folder and returns paths
 func SetupBaleenDirectory() (string, string, string, error) {
 	homeDir, err := os.UserHomeDir()

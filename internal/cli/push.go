@@ -2,13 +2,12 @@ package cli
 
 import (
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
 	"github.com/BGYKanishka/baleen-engine/internal/docker"
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
+	"github.com/BGYKanishka/baleen-engine/internal/network"
 	"github.com/BGYKanishka/baleen-engine/internal/transfer"
 	"github.com/chzyer/readline"
 )
@@ -19,15 +18,27 @@ func handlePush(parts []string, rl *readline.Instance, inputChan chan string, sy
 		return
 	}
 
-	targetStr := resolveTargetAddress(parts[1], ctx)
+	targetIP, targetPort, err := network.ResolveTargetAddress(ctx.PeerRegistry, parts[1])
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+	if _, ok := ctx.PeerRegistry.GetAllPeers()[parts[1]]; ok {
+		fmt.Printf("\nResolved Node '%s' to %s:%d\n", parts[1], targetIP, targetPort)
+	}
 	targetImage := parts[2]
 	buildContext := "."
 	if len(parts) >= 4 {
 		buildContext = parts[3]
 	}
 
-	targetIP, targetPort := splitHostPort(targetStr)
-	targetArch := detectTargetArch(targetIP, targetPort)
+	fmt.Printf("\nPinging %s to detect architecture...\n", targetIP)
+	targetArch := network.DetectRemoteArch(targetIP, targetPort)
+	if targetArch == "linux/amd64" {
+		fmt.Printf("Could not reach pre-flight server at %s. Falling back to linux/amd64\n", targetIP)
+	} else {
+		fmt.Printf("Target architecture detected: %s\n", targetArch)
+	}
 
 	fmt.Printf("Preparing to export '%s'...\n", targetImage)
 
@@ -46,51 +57,6 @@ func handlePush(parts []string, rl *readline.Instance, inputChan chan string, sy
 	}
 
 	recordAndPush(ctx, exportedFilePath, targetImage, finalArch, targetIP, targetPort)
-}
-
-// checks the peer registry for a named node,
-// and falls back to treating the input as a raw IP:PORT.
-func resolveTargetAddress(target string, ctx EngineContext) string {
-	peers := ctx.PeerRegistry.GetAllPeers()
-	if resolvedIP, exists := peers[target]; exists {
-		fmt.Printf("\nResolved Node '%s' to %s\n", target, resolvedIP)
-		return resolvedIP
-	}
-	return target
-}
-
-// parses "IP:PORT" or plain "IP" into separate values.
-func splitHostPort(addr string) (ip string, port int) {
-	port = 8080
-	if strings.Contains(addr, ":") {
-		parts := strings.Split(addr, ":")
-		ip = parts[0]
-		fmt.Sscanf(parts[1], "%d", &port)
-		return
-	}
-	ip = addr
-	return
-}
-
-// calls the remote pre-flight server to get its CPU architecture.
-func detectTargetArch(ip string, port int) string {
-	fmt.Printf("\nPinging %s to detect architecture...\n", ip)
-
-	metadataURL := fmt.Sprintf("http://%s:%d/architecture", ip, port+1)
-	client := http.Client{Timeout: 2 * time.Second}
-
-	resp, err := client.Get(metadataURL)
-	if err != nil {
-		arch := "linux/amd64"
-		fmt.Printf("Could not reach pre-flight server at %s. Falling back to %s\n", ip, arch)
-		return arch
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, _ := io.ReadAll(resp.Body)
-	arch := strings.TrimSpace(string(bodyBytes))
-	fmt.Printf("Target architecture detected: %s\n", arch)
-	return arch
 }
 
 // runs the Docker export

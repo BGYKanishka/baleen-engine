@@ -2,8 +2,10 @@ package docker
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
 
 	"github.com/docker/docker/client"
 )
@@ -35,6 +37,28 @@ func LoadImage(filePath string) error {
 	_, err = io.Copy(io.Discard, resp.Body)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// loads a Docker image from a .tar file and re-tags it with the specified image name.
+func LoadAndTag(filePath, imageName string) error {
+	if err := LoadImage(filePath); err != nil {
+		return err
+	}
+	// Re-tag only when the cross-compiled temporary image exists.
+	tmpName := imageName + "-baleen-tmp"
+	if err := exec.Command("docker", "inspect", tmpName).Run(); err != nil {
+		return nil
+	}
+
+	if err := exec.Command("docker", "tag", tmpName, imageName).Run(); err != nil {
+		return fmt.Errorf("failed to tag image %s: %w", imageName, err)
+	}
+
+	if err := exec.Command("docker", "rmi", tmpName).Run(); err != nil {
+		fmt.Printf("Warning: failed to remove temporary tag %s: %v\n", tmpName, err)
 	}
 
 	return nil

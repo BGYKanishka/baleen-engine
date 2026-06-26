@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -122,20 +121,9 @@ func feedInput(rl *readline.Instance, inputChan chan string, syncChan chan struc
 // loads a received image tarball into the local Docker daemon.
 func handleDownload(result transfer.DownloadResult, rl *readline.Instance) {
 	fmt.Println("\nUnpacking and loading image into Docker Daemon...")
-	if err := docker.LoadImage(result.Path); err != nil {
+	if err := docker.LoadAndTag(result.Path, result.ImageName); err != nil {
 		fmt.Println("Failed to load image into Docker:", err)
 	} else {
-		// Tag the image only if it was cross-compiled and has the -tmp suffix
-		tmpName := result.ImageName + "-baleen-tmp"
-		if err := exec.Command("docker", "inspect", tmpName).Run(); err == nil {
-			if err := exec.Command("docker", "tag", tmpName, result.ImageName).Run(); err != nil {
-				fmt.Printf("Error: Failed to tag image %s: %v\n", result.ImageName, err)
-			} else {
-				if err := exec.Command("docker", "rmi", tmpName).Run(); err != nil {
-					fmt.Printf("Warning: Failed to clean up temporary tag %s: %v\n", tmpName, err)
-				}
-			}
-		}
 		fmt.Println("Image successfully loaded and tagged! (Type 'docker images' in another terminal to verify)")
 	}
 	rl.Refresh()
