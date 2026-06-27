@@ -17,6 +17,7 @@ import (
 type PeerMeta struct {
 	Source   string
 	Status   string
+	Arch     string
 	LastSeen time.Time
 }
 
@@ -41,11 +42,37 @@ func (pr *PeerRegistry) AddPeer(name, address string) {
 	pr.nodes[name] = address
 
 	// Track metadata for the API invisibly
+	isNew := false
 	if _, exists := pr.metadata[name]; !exists {
-		pr.metadata[name] = &PeerMeta{Source: "mdns", Status: "reachable", LastSeen: time.Now()}
+		pr.metadata[name] = &PeerMeta{Source: "mdns", Status: "reachable", Arch: "unknown", LastSeen: time.Now()}
+		isNew = true
 	} else {
 		pr.metadata[name].LastSeen = time.Now()
 		pr.metadata[name].Status = "reachable"
+		if pr.metadata[name].Arch == "unknown" {
+			isNew = true
+		}
+	}
+
+	if isNew {
+		go pr.detectAndUpdateArch(name, address)
+	}
+}
+
+func (pr *PeerRegistry) detectAndUpdateArch(name, address string) {
+	parts := strings.SplitN(address, ":", 2)
+	if len(parts) == 2 {
+		ip := parts[0]
+		var port int
+		fmt.Sscanf(parts[1], "%d", &port)
+		if port > 0 {
+			arch := DetectRemoteArch(ip, port)
+			pr.mu.Lock()
+			if meta, exists := pr.metadata[name]; exists {
+				meta.Arch = arch
+			}
+			pr.mu.Unlock()
+		}
 	}
 }
 
@@ -180,7 +207,8 @@ func (pr *PeerRegistry) AddCustomPeer(name, address, source string) {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
 	pr.nodes[name] = address
-	pr.metadata[name] = &PeerMeta{Source: source, Status: "reachable", LastSeen: time.Now()}
+	pr.metadata[name] = &PeerMeta{Source: source, Status: "reachable", Arch: "unknown", LastSeen: time.Now()}
+	go pr.detectAndUpdateArch(name, address)
 }
 
 func LoadStaticPeers(pr *PeerRegistry) {
@@ -202,6 +230,7 @@ type APINode struct {
 	Address  string
 	Source   string
 	Status   string
+	Arch     string
 	LastSeen time.Time
 }
 
@@ -213,12 +242,13 @@ func (pr *PeerRegistry) GetDetailedPeers() map[string]*APINode {
 	for name, addr := range pr.nodes {
 		meta := pr.metadata[name]
 		if meta == nil {
-			meta = &PeerMeta{Source: "mdns", Status: "reachable", LastSeen: time.Now()}
+			meta = &PeerMeta{Source: "mdns", Status: "reachable", Arch: "unknown", LastSeen: time.Now()}
 		}
 		copyMap[name] = &APINode{
 			Address:  addr,
 			Source:   meta.Source,
 			Status:   meta.Status,
+			Arch:     meta.Arch,
 			LastSeen: meta.LastSeen,
 		}
 	}

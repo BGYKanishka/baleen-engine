@@ -141,7 +141,7 @@ func (l *Ledger) HasLayer(layer string) bool {
 	return hasLayer
 }
 
-// Rremoves a single commit
+// Removes a single commit
 func (l *Ledger) DeleteCommit(hashPrefix string) error {
 	return l.db.Update(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket([]byte("Ledger"))

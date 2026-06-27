@@ -8,6 +8,7 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
   const [selectedPeer, setSelectedPeer] = useState<string>('');
   const [buildContext, setBuildContext] = useState<string>('');
   const [pushing, setPushing] = useState(false);
+  const [imageArch, setImageArch] = useState<string>('');
 
   useEffect(() => {
     const fetchLocalImages = async () => {
@@ -46,6 +47,18 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
     const fullImage = `${imageName}:${imageTag}`;
     setPushModal({ isOpen: true, image: fullImage });
     setBuildContext('');
+    setImageArch('');
+
+    try {
+      const inspectRes = await ddClient.docker.cli.exec('inspect', [fullImage]);
+      const inspectData = JSON.parse(inspectRes.stdout);
+      if (inspectData && inspectData.length > 0) {
+        setImageArch(inspectData[0].Os + '/' + inspectData[0].Architecture);
+      }
+    } catch (err) {
+      console.error('Failed to inspect image arch', err);
+    }
+
     try {
       const res = await fetch(`http://127.0.0.1:${port}/api/peers`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -87,6 +100,9 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
       setPushing(false);
     }
   };
+
+  const selectedPeerObj = peers.find(p => p.hostname === selectedPeer);
+  const hideBuildContext = selectedPeerObj && selectedPeerObj.arch && selectedPeerObj.arch !== 'unknown' && imageArch && selectedPeerObj.arch === imageArch;
 
   return (
     <div className="relative">
@@ -149,22 +165,30 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
             </div>
 
             {/* Build context — optional, for cross-compilation */}
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">
-                Build Context <span className="normal-case text-gray-600">(optional — for cross-compilation)</span>
-              </p>
-              <input
-                type="text"
-                placeholder="/path/to/your/project"
-                value={buildContext}
-                onChange={(e) => setBuildContext(e.target.value)}
-                className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white font-mono text-sm placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-blue-500"
-              />
-              <p className="text-xs text-gray-600 mt-1">
-                If the receiver has a different CPU architecture, the engine will rebuild the image
-                using the Dockerfile found here. Leave blank to send as-is.
-              </p>
-            </div>
+            {hideBuildContext ? (
+              <div className="bg-green-50 dark:bg-green-900/30 p-3 rounded border border-green-200 dark:border-green-800">
+                <p className="text-sm text-green-800 dark:text-green-300">
+                  <span className="font-semibold">Match!</span> Image architecture ({imageArch}) matches the destination peer. No cross-compilation needed.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">
+                  Build Context <span className="normal-case text-gray-600">(optional — for cross-compilation)</span>
+                </p>
+                <input
+                  type="text"
+                  placeholder="/path/to/your/project"
+                  value={buildContext}
+                  onChange={(e) => setBuildContext(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white font-mono text-sm placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                />
+                <p className="text-xs text-gray-600 mt-1">
+                  If the receiver has a different CPU architecture, the engine will rebuild the image
+                  using the Dockerfile found here. Leave blank to send as-is.
+                </p>
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex justify-end gap-3 pt-1">
@@ -181,8 +205,8 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
               >
                 {pushing && (
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
                 )}
                 {pushing ? 'Queued…' : 'Confirm Push'}

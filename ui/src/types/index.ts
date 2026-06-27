@@ -3,6 +3,7 @@ export interface Peer {
   ip: string;
   source: string;
   status: string;
+  arch?: string;
   lastSeen: string;
 }
 
