@@ -15,6 +15,7 @@ type PeerResponse struct {
 	IP       string    `json:"ip"`
 	Source   string    `json:"source"`
 	Status   string    `json:"status"`
+	Arch     string    `json:"arch"`
 	LastSeen time.Time `json:"lastSeen"`
 }
 
@@ -30,6 +31,7 @@ func Peers(ctx cli.EngineContext) http.HandlerFunc {
 					IP:       node.Address,
 					Source:   node.Source,
 					Status:   node.Status,
+					Arch:     node.Arch,
 					LastSeen: node.LastSeen,
 				})
 			}
