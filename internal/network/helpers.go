@@ -30,12 +30,13 @@ func DetectRemoteArch(ip string, port int) string {
 }
 
 // ResolveTargetAddress resolves a peer name or address to an IP and port, using the peer registry if available.
-func ResolveTargetAddress(registry *PeerRegistry, peer string) (ip string, port int, err error) {
+func ResolveTargetAddress(registry *PeerRegistry, peer string) (ip string, port int, fingerprint string, err error) {
 	address := peer
 
-	if peers := registry.GetAllPeers(); len(peers) > 0 {
+	if peers := registry.GetDetailedPeers(); len(peers) > 0 {
 		if resolved, exists := peers[peer]; exists {
-			address = resolved
+			address = resolved.Address
+			fingerprint = resolved.Fingerprint
 		}
 	}
 

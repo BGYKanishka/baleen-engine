@@ -67,7 +67,7 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 		}
 	}()
 
-	targetIP, port, resolveErr := network.ResolveTargetAddress(ctx.PeerRegistry, peer)
+	targetIP, port, fingerprint, resolveErr := network.ResolveTargetAddress(ctx.PeerRegistry, peer)
 	if resolveErr != nil {
 		ctx.EngineLedger.RecordCommit(ledger.Commit{
 			Hash:      tempID,
@@ -110,7 +110,7 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 		ctx.EngineLedger.DeleteCommit(tempID)
 	}
 
-	pushErr := transfer.PushImage(targetIP, port, exportedFilePath, image, hash, ctx.NodeName, arch, ctx.TLSConfig)
+	pushErr := transfer.PushImage(targetIP, port, fingerprint, exportedFilePath, image, hash, ctx.NodeName, arch, ctx.TLSConfig)
 
 	status := "Completed"
 	if pushErr != nil {

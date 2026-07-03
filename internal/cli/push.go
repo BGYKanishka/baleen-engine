@@ -19,7 +19,7 @@ func handlePush(parts []string, rl *readline.Instance, inputChan chan string, sy
 		return
 	}
 
-	targetIP, targetPort, err := network.ResolveTargetAddress(ctx.PeerRegistry, parts[1])
+	targetIP, targetPort, fingerprint, err := network.ResolveTargetAddress(ctx.PeerRegistry, parts[1])
 	if err != nil {
 		slog.Error("failed to resolve target", "error", err)
 		return
@@ -57,7 +57,7 @@ func handlePush(parts []string, rl *readline.Instance, inputChan chan string, sy
 		return
 	}
 
-	recordAndPush(ctx, exportedFilePath, targetImage, finalArch, targetIP, targetPort)
+	recordAndPush(ctx, exportedFilePath, targetImage, finalArch, targetIP, targetPort, fingerprint)
 }
 
 // runs the Docker export
@@ -90,11 +90,11 @@ func exportWithFallback(ctx EngineContext, cfg docker.PreflightConfig, rl *readl
 }
 
 // writes the export to the ledger then streams it to the target node.
-func recordAndPush(ctx EngineContext, exportedPath, image, arch, targetIP string, targetPort int) {
+func recordAndPush(ctx EngineContext, exportedPath, image, arch, targetIP string, targetPort int, fingerprint string) {
 	fmt.Printf("Streaming image to disk at: %s\n", exportedPath)
 
 	hash, _ := ledger.GenerateHash(exportedPath)
-	pushErr := transfer.PushImage(targetIP, targetPort, exportedPath, image, hash, ctx.NodeName, arch, ctx.TLSConfig)
+	pushErr := transfer.PushImage(targetIP, targetPort, fingerprint, exportedPath, image, hash, ctx.NodeName, arch, ctx.TLSConfig)
 
 	status := "Completed"
 	if pushErr != nil {

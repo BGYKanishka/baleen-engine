@@ -3,16 +3,35 @@ package network
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
 	"encoding/pem"
 	"math/big"
+	"os"
+	"path/filepath"
 	"time"
 )
 
 // Creates a self-signed TLS certificate for secure communication between nodes.
-func GenerateEphemeralTLS() (*tls.Config, error) {
+func LoadOrGenerateTLS(certsDir string) (*tls.Config, error) {
+	certPath := filepath.Join(certsDir, "cert.pem")
+	keyPath := filepath.Join(certsDir, "key.pem")
+
+	// Check if certificates already exist
+	if _, err := os.Stat(certPath); err == nil {
+		if _, err := os.Stat(keyPath); err == nil {
+			tlsCert, err := tls.LoadX509KeyPair(certPath, keyPath)
+			if err == nil {
+				return &tls.Config{
+					Certificates:       []tls.Certificate{tlsCert},
+					InsecureSkipVerify: true,
+				}, nil
+			}
+		}
+	}
 	// Generate a RSA Private Key
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -42,6 +61,10 @@ func GenerateEphemeralTLS() (*tls.Config, error) {
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
 
+	// Save to disk
+	os.WriteFile(certPath, certPEM, 0644)
+	os.WriteFile(keyPath, keyPEM, 0600)
+
 	// Load into a TLS KeyPair
 	tlsCert, err := tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {
@@ -53,4 +76,13 @@ func GenerateEphemeralTLS() (*tls.Config, error) {
 		Certificates:       []tls.Certificate{tlsCert},
 		InsecureSkipVerify: true,
 	}, nil
+}
+
+// GetCertificateFingerprint returns the SHA-256 fingerprint of the primary certificate in the config
+func GetCertificateFingerprint(config *tls.Config) string {
+	if len(config.Certificates) == 0 || len(config.Certificates[0].Certificate) == 0 {
+		return ""
+	}
+	hash := sha256.Sum256(config.Certificates[0].Certificate[0])
+	return hex.EncodeToString(hash[:])
 }

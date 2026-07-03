@@ -9,20 +9,22 @@ import (
 const MetadataPortOffset = 1
 
 // creates the folder and returns paths
-func SetupBaleenDirectory() (string, string, string, error) {
+func SetupBaleenDirectory() (string, string, string, string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 
 	baleenRoot := filepath.Join(homeDir, ".baleen")
 	tempDir := filepath.Join(baleenRoot, "temp")
 	incomingDir := filepath.Join(baleenRoot, "incoming")
 	dbPath := filepath.Join(baleenRoot, "baleen.db")
+	certsDir := filepath.Join(baleenRoot, "certs")
 
 	// Create both directories
 	os.MkdirAll(tempDir, 0755)
 	os.MkdirAll(incomingDir, 0755)
+	os.MkdirAll(certsDir, 0755)
 
-	return tempDir, incomingDir, dbPath, nil
+	return tempDir, incomingDir, dbPath, certsDir, nil
 }

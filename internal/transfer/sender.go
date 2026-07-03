@@ -1,26 +1,27 @@
 package transfer
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"os"
-	"strconv"
 
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
 )
 
 // connects to the remote node, negotiates a delta transfer, and streams the pruned payload
-func PushImage(targetIP string, port int, filePath string, imageName string, hash string, author string, imageArch string, tlsConfig *tls.Config) error {
+func PushImage(targetIP string, port int, fingerprint string, filePath string, imageName string, hash string, author string, imageArch string, tlsConfig *tls.Config) error {
 	fileSize, layers, err := inspectTarball(filePath)
 	if err != nil {
 		return err
 	}
 
-	conn, err := dialReceiver(targetIP, port, tlsConfig)
+	conn, err := dialReceiver(targetIP, port, fingerprint, tlsConfig)
 	if err != nil {
 		return err
 	}
@@ -66,13 +67,31 @@ func inspectTarball(filePath string) (int64, []string, error) {
 }
 
 // opens a TLS connection to the remote node
-func dialReceiver(targetIP string, port int, tlsConfig *tls.Config) (*tls.Conn, error) {
-	address := net.JoinHostPort(targetIP, strconv.Itoa(port))
+func dialReceiver(targetIP string, port int, expectedFingerprint string, tlsConfig *tls.Config) (*tls.Conn, error) {
+	address := fmt.Sprintf("%s:%d", targetIP, port)
 	slog.Info("connecting to remote node", "address", address)
 
-	conn, err := tls.Dial("tcp", address, tlsConfig)
+	tlsCfg := tlsConfig.Clone()
+	if expectedFingerprint == "" {
+		return nil, fmt.Errorf("refusing to connect: target node did not provide a TLS fingerprint (it may be running an outdated, insecure version of Baleen)")
+	}
+
+	tlsCfg.InsecureSkipVerify = true
+	tlsCfg.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+		if len(rawCerts) == 0 {
+			return fmt.Errorf("no certificate presented by server")
+		}
+		hash := sha256.Sum256(rawCerts[0])
+		fingerprint := hex.EncodeToString(hash[:])
+		if fingerprint != expectedFingerprint {
+			return fmt.Errorf("TLS certificate fingerprint mismatch! Expected %s, got %s", expectedFingerprint, fingerprint)
+		}
+		return nil
+	}
+
+	conn, err := tls.Dial("tcp", address, tlsCfg)
 	if err != nil {
-		return nil, fmt.Errorf("connection failed: %w", err)
+		return nil, fmt.Errorf("failed to connect to %s: %w", address, err)
 	}
 	return conn, nil
 }

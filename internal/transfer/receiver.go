@@ -58,7 +58,7 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	//publish receiving
 	PublishStatus(req.ImageName, req.Author, "pull", "waiting for approval")
 
-	_, _, dbPath, err := config.SetupBaleenDirectory()
+	_, _, dbPath, _, err := config.SetupBaleenDirectory()
 	if err != nil {
 		slog.Error("error getting directories", "error", err)
 		return

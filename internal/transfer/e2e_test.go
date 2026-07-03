@@ -23,7 +23,7 @@ func TestE2E_PushReceive_FullFlow(t *testing.T) {
 	listener, addr := testListener(t, tlsCfg)
 	approvalChan := make(chan ApprovalRequest, 1)
 	downloadedChan := make(chan DownloadResult, 1)
-	go StartReceiver(context.Background(), &sync.WaitGroup{},listener, incomingDir, approvalChan, downloadedChan, db)
+	go StartReceiver(context.Background(), &sync.WaitGroup{}, listener, incomingDir, approvalChan, downloadedChan, db)
 	go autoApprove(approvalChan, true)
 
 	tarPath := buildMinimalDockerTarball(t,
@@ -31,7 +31,7 @@ func TestE2E_PushReceive_FullFlow(t *testing.T) {
 	)
 	host, port := parseAddr(t, addr)
 
-	if err := PushImage(host, port, tarPath, "test-image:latest", "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", "tester", "linux/amd64", tlsCfg); err != nil {
+	if err := PushImage(host, port, network.GetCertificateFingerprint(tlsCfg), tarPath, "test-image:latest", "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", "tester", "linux/amd64", tlsCfg); err != nil {
 		t.Fatalf("PushImage: %v", err)
 	}
 
@@ -51,13 +51,13 @@ func TestE2E_PushReceive_Rejected(t *testing.T) {
 	listener, addr := testListener(t, tlsCfg)
 	approvalChan := make(chan ApprovalRequest, 1)
 	downloadedChan := make(chan DownloadResult, 1)
-	go StartReceiver(context.Background(), &sync.WaitGroup{},listener, incomingDir, approvalChan, downloadedChan, db)
+	go StartReceiver(context.Background(), &sync.WaitGroup{}, listener, incomingDir, approvalChan, downloadedChan, db)
 	go autoApprove(approvalChan, false) // ← reject
 
 	tarPath := buildMinimalDockerTarball(t, []string{sha256Digest([]byte("layerA"))})
 	host, port := parseAddr(t, addr)
 
-	err := PushImage(host, port, tarPath, "test-image:latest", "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3", "tester", "linux/amd64", tlsCfg)
+	err := PushImage(host, port, network.GetCertificateFingerprint(tlsCfg), tarPath, "test-image:latest", "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3", "tester", "linux/amd64", tlsCfg)
 	if err == nil {
 		t.Fatal("expected error for rejected transfer, got nil")
 	}
@@ -101,13 +101,13 @@ func TestE2E_DeltaTransfer_ReceiverAlreadyHasLayer(t *testing.T) {
 	listener, addr := testListener(t, tlsCfg)
 	approvalChan := make(chan ApprovalRequest, 1)
 	downloadedChan := make(chan DownloadResult, 1)
-	go StartReceiver(context.Background(), &sync.WaitGroup{},listener, incomingDir, approvalChan, downloadedChan, db)
+	go StartReceiver(context.Background(), &sync.WaitGroup{}, listener, incomingDir, approvalChan, downloadedChan, db)
 	go autoApprove(approvalChan, true)
 
 	tarPath := buildMinimalDockerTarball(t, []string{layerA, layerB})
 	host, port := parseAddr(t, addr)
 
-	if err := PushImage(host, port, tarPath, "delta-image:v2", "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4", "tester", "linux/amd64", tlsCfg); err != nil {
+	if err := PushImage(host, port, network.GetCertificateFingerprint(tlsCfg), tarPath, "delta-image:v2", "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4", "tester", "linux/amd64", tlsCfg); err != nil {
 		t.Fatalf("PushImage: %v", err)
 	}
 
@@ -125,7 +125,7 @@ func TestE2E_DeltaTransfer_ReceiverAlreadyHasLayer(t *testing.T) {
 // testSetup creates TLS config, temp incomingDir, and in-memory ledger.
 func testSetup(t *testing.T) (*tls.Config, string, *ledger.Ledger) {
 	t.Helper()
-	tlsCfg, err := network.GenerateEphemeralTLS()
+	tlsCfg, err := network.LoadOrGenerateTLS(t.TempDir())
 	if err != nil {
 		t.Fatalf("GenerateEphemeralTLS: %v", err)
 	}

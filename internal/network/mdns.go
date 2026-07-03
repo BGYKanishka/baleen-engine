@@ -15,10 +15,11 @@ import (
 
 // API Metadata struct (Invisible to CLI)
 type PeerMeta struct {
-	Source   string
-	Status   string
-	Arch     string
-	LastSeen time.Time
+	Source      string
+	Status      string
+	Arch        string
+	Fingerprint string
+	LastSeen    time.Time
 }
 
 // safely stores active nodes to prevent race conditions
@@ -35,7 +36,7 @@ func NewPeerRegistry() *PeerRegistry {
 	}
 }
 
-func (pr *PeerRegistry) AddPeer(name, address string) {
+func (pr *PeerRegistry) AddPeer(name, address, fingerprint string) {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
 	pr.nodes[name] = address
@@ -43,11 +44,12 @@ func (pr *PeerRegistry) AddPeer(name, address string) {
 	// Track metadata for the API invisibly
 	isNew := false
 	if _, exists := pr.metadata[name]; !exists {
-		pr.metadata[name] = &PeerMeta{Source: "mdns", Status: "reachable", Arch: "unknown", LastSeen: time.Now()}
+		pr.metadata[name] = &PeerMeta{Source: "mdns", Status: "reachable", Arch: "unknown", Fingerprint: fingerprint, LastSeen: time.Now()}
 		isNew = true
 	} else {
 		pr.metadata[name].LastSeen = time.Now()
 		pr.metadata[name].Status = "reachable"
+		pr.metadata[name].Fingerprint = fingerprint
 		if pr.metadata[name].Arch == "unknown" {
 			isNew = true
 		}
@@ -128,7 +130,7 @@ func (pr *PeerRegistry) StartHealthChecker(ctx context.Context, wg *sync.WaitGro
 	}
 }
 
-func StartBroadcaster(ctx context.Context, wg *sync.WaitGroup, nodeName string, port int) {
+func StartBroadcaster(ctx context.Context, wg *sync.WaitGroup, nodeName string, port int, fingerprint string) {
 	defer wg.Done()
 	slog.Info("broadcasting presence on local WiFi", "nodeName", nodeName, "port", port)
 	for {
@@ -138,7 +140,7 @@ func StartBroadcaster(ctx context.Context, wg *sync.WaitGroup, nodeName string, 
 		default:
 		}
 		// Try to bind to the current WiFi network
-		server, err := zeroconf.Register(nodeName, "_baleen._tcp", "local.", port, nil, nil)
+		server, err := zeroconf.Register(nodeName, "_baleen._tcp", "local.", port, []string{"fp=" + fingerprint}, nil)
 		if err == nil {
 			select {
 			case <-ctx.Done():
@@ -204,12 +206,20 @@ func DiscoverPeers(ctx context.Context, wg *sync.WaitGroup, currentNodeName stri
 						continue
 					}
 
+					var fingerprint string
+					for _, txt := range entry.Text {
+						if strings.HasPrefix(txt, "fp=") {
+							fingerprint = strings.TrimPrefix(txt, "fp=")
+							break
+						}
+					}
+
 					prMap := registry.GetAllPeers()
 					if _, exists := prMap[entry.Instance]; !exists {
 						slog.Info("found remote peer", "peer", entry.Instance, "ip", validAddress)
 					}
 
-					registry.AddPeer(entry.Instance, validAddress)
+					registry.AddPeer(entry.Instance, validAddress, fingerprint)
 				}
 			}
 		}(entries)
@@ -234,7 +244,7 @@ func (pr *PeerRegistry) AddCustomPeer(name, address, source string) {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
 	pr.nodes[name] = address
-	pr.metadata[name] = &PeerMeta{Source: source, Status: "reachable", Arch: "unknown", LastSeen: time.Now()}
+	pr.metadata[name] = &PeerMeta{Source: source, Status: "reachable", Arch: "unknown", Fingerprint: "", LastSeen: time.Now()}
 	go pr.detectAndUpdateArch(name, address)
 }
 
@@ -254,11 +264,12 @@ func LoadStaticPeers(pr *PeerRegistry) {
 }
 
 type APINode struct {
-	Address  string
-	Source   string
-	Status   string
-	Arch     string
-	LastSeen time.Time
+	Address     string
+	Source      string
+	Status      string
+	Arch        string
+	Fingerprint string
+	LastSeen    time.Time
 }
 
 func (pr *PeerRegistry) GetDetailedPeers() map[string]*APINode {
@@ -272,11 +283,12 @@ func (pr *PeerRegistry) GetDetailedPeers() map[string]*APINode {
 			meta = &PeerMeta{Source: "mdns", Status: "reachable", Arch: "unknown", LastSeen: time.Now()}
 		}
 		copyMap[name] = &APINode{
-			Address:  addr,
-			Source:   meta.Source,
-			Status:   meta.Status,
-			Arch:     meta.Arch,
-			LastSeen: meta.LastSeen,
+			Address:     addr,
+			Source:      meta.Source,
+			Status:      meta.Status,
+			Arch:        meta.Arch,
+			Fingerprint: meta.Fingerprint,
+			LastSeen:    meta.LastSeen,
 		}
 	}
 	return copyMap

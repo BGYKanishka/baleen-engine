@@ -26,7 +26,7 @@ import (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	
+
 	var wg sync.WaitGroup
 	// Detect Daemon Mode vs Standard CLI
 	isDaemon := len(os.Args) > 1 && os.Args[1] == "daemon"
@@ -54,14 +54,18 @@ func main() {
 		targetPort = *port
 	}
 
-	if !isDaemon {
-		fmt.Println("Generating ephemeral TLS certificates for secure transfers...")
+	// Setup Environment
+	tempDir, incomingDir, dbPath, certsDir, err := config.SetupBaleenDirectory()
+	if err != nil {
+		slog.Error("failed to setup directories", "error", err)
+		os.Exit(1)
 	}
-	tlsConfig, err := network.GenerateEphemeralTLS()
+	tlsConfig, err := network.LoadOrGenerateTLS(certsDir)
 	if err != nil {
 		slog.Error("failed to generate TLS config", "error", err)
 		os.Exit(1)
 	}
+	nodeFingerprint := network.GetCertificateFingerprint(tlsConfig)
 
 	//Start the TLS Listener and grab the port
 	address := fmt.Sprintf(":%d", targetPort)
@@ -78,12 +82,6 @@ func main() {
 		fmt.Printf("Starting Baleen Engine as '%s' on Port %d...\n", finalName, actualPort)
 	}
 
-	// Setup Environment
-	tempDir, incomingDir, dbPath, err := config.SetupBaleenDirectory()
-	if err != nil {
-		slog.Error("failed to setup directories", "error", err)
-		os.Exit(1)
-	}
 	// Initialize the persistent Ledger DB
 	engineLedger, err := ledger.NewLedger(dbPath)
 	if err != nil {
@@ -101,7 +99,7 @@ func main() {
 
 	wg.Add(4)
 	// Start Network Broadcaster using the REAL port
-	go network.StartBroadcaster(ctx, &wg, finalName, actualPort)
+	go network.StartBroadcaster(ctx, &wg, finalName, actualPort, nodeFingerprint)
 
 	peerRegistry := network.NewPeerRegistry()
 
@@ -170,10 +168,10 @@ func main() {
 
 	<-ctx.Done()
 	slog.Info("Shutting down Baleen Engine...")
-	
+
 	// Close listener to unblock StartReceiver
 	listener.Close()
-	
+
 	wg.Wait()
 	slog.Info("Shutdown complete.")
 }
