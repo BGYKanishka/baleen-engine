@@ -90,7 +90,7 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 		ForceRawExport: false,
 	}
 
-	exportedFilePath, arch, err := docker.ExportImage(cfg)
+	exportedFilePath, arch, err := ctx.DockerManager.ExportImage(cfg)
 	if err != nil {
 		ctx.EngineLedger.RecordCommit(ledger.Commit{
 			Hash:      tempID,

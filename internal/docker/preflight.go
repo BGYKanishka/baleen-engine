@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
-	"github.com/docker/docker/client"
 )
 
 // holds the parameters for the handshake
@@ -31,23 +29,14 @@ func archOnly(platform string) string {
 	return parts[len(parts)-1]
 }
 
-func runPreflightHandshake(config PreflightConfig) HandshakeReport {
+func (m *Manager) RunPreflightHandshake(config PreflightConfig) HandshakeReport {
 	report := HandshakeReport{
 		Passed:         true,
 		TargetPlatform: config.ExpectedTarget,
 	}
 
-	// Connect to Docker to inspect the local image
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		report.Passed = false
-		report.FatalErrors = append(report.FatalErrors, fmt.Errorf("docker daemon unreachable: %w", err))
-		return report
-	}
-	defer cli.Close()
-
 	ctx := context.Background()
-	inspectData, _, err := cli.ImageInspectWithRaw(ctx, config.ImageName)
+	inspectData, _, err := m.Cli.ImageInspectWithRaw(ctx, config.ImageName)
 
 	if err != nil {
 		// Image doesn't exist locally — will need a cross-build

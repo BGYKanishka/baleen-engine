@@ -5,19 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 
-	"github.com/docker/docker/client"
+	"github.com/docker/docker/api/types/image"
 )
 
 // reads a .tar file and loads it into the Docker
-func LoadImage(filePath string) error {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return err
-	}
-	defer cli.Close()
-
+func (m *Manager) LoadImage(filePath string) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return err
@@ -26,7 +19,7 @@ func LoadImage(filePath string) error {
 
 	ctx := context.Background()
 
-	resp, err := cli.ImageLoad(ctx, file)
+	resp, err := m.Cli.ImageLoad(ctx, file)
 	if err != nil {
 		return err
 	}
@@ -43,21 +36,22 @@ func LoadImage(filePath string) error {
 }
 
 // loads a Docker image from a .tar file and re-tags it with the specified image name.
-func LoadAndTag(filePath, imageName string) error {
-	if err := LoadImage(filePath); err != nil {
+func (m *Manager) LoadAndTag(filePath, imageName string) error {
+	if err := m.LoadImage(filePath); err != nil {
 		return err
 	}
 	// Re-tag only when the cross-compiled temporary image exists.
 	tmpName := imageName + "-baleen-tmp"
-	if err := exec.Command("docker", "inspect", tmpName).Run(); err != nil {
+	ctx := context.Background()
+	if _, _, err := m.Cli.ImageInspectWithRaw(ctx, tmpName); err != nil {
 		return nil
 	}
 
-	if err := exec.Command("docker", "tag", tmpName, imageName).Run(); err != nil {
+	if err := m.Cli.ImageTag(ctx, tmpName, imageName); err != nil {
 		return fmt.Errorf("failed to tag image %s: %w", imageName, err)
 	}
 
-	if err := exec.Command("docker", "rmi", tmpName).Run(); err != nil {
+	if _, err := m.Cli.ImageRemove(ctx, tmpName, image.RemoveOptions{Force: true, PruneChildren: true}); err != nil {
 		fmt.Printf("Warning: failed to remove temporary tag %s: %v\n", tmpName, err)
 	}
 

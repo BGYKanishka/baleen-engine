@@ -26,6 +26,7 @@ type EngineContext struct {
 	ApprovalChan    chan transfer.ApprovalRequest
 	PendingApproval *PendingApprovalStore
 	DownloadedChan  chan transfer.DownloadResult
+	DockerManager   *docker.Manager
 }
 
 type PendingApprovalStore struct {
@@ -86,7 +87,7 @@ func Start(ctx EngineContext) {
 			rl.Refresh()
 
 		case result := <-ctx.DownloadedChan:
-			handleDownload(result, rl)
+			handleDownload(result, rl, ctx)
 
 		case input := <-inputChan:
 			input = strings.TrimSpace(input)
@@ -119,9 +120,9 @@ func feedInput(rl *readline.Instance, inputChan chan string, syncChan chan struc
 }
 
 // loads a received image tarball into the local Docker daemon.
-func handleDownload(result transfer.DownloadResult, rl *readline.Instance) {
+func handleDownload(result transfer.DownloadResult, rl *readline.Instance, ctx EngineContext) {
 	fmt.Println("\nUnpacking and loading image into Docker Daemon...")
-	if err := docker.LoadAndTag(result.Path, result.ImageName); err != nil {
+	if err := ctx.DockerManager.LoadAndTag(result.Path, result.ImageName); err != nil {
 		fmt.Println("Failed to load image into Docker:", err)
 	} else {
 		fmt.Println("Image successfully loaded and tagged! (Type 'docker images' in another terminal to verify)")

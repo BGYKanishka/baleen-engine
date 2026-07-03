@@ -1,6 +1,7 @@
 package transfer
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/BGYKanishka/baleen-engine/internal/config"
@@ -21,14 +23,19 @@ type DownloadResult struct {
 }
 
 // runs a background TCP server to listen for incoming files
-func StartReceiver(listener net.Listener, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan DownloadResult, engineLedger *ledger.Ledger) {
-	defer listener.Close()
+func StartReceiver(ctx context.Context, wg *sync.WaitGroup, listener net.Listener, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan DownloadResult, engineLedger *ledger.Ledger) {
+	defer wg.Done()
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Failed to accept connection:", err)
-			continue
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				fmt.Println("Failed to accept connection:", err)
+				continue
+			}
 		}
 		go handleIncomingTransfer(conn, incomingDir, approvalChan, downloadedChan, engineLedger)
 	}

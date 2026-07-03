@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
+	"sync"
 
 	"github.com/BGYKanishka/baleen-engine/internal/api"
 	"github.com/BGYKanishka/baleen-engine/internal/cli"
@@ -19,6 +22,10 @@ import (
 )
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	
+	var wg sync.WaitGroup
 	// Detect Daemon Mode vs Standard CLI
 	isDaemon := len(os.Args) > 1 && os.Args[1] == "daemon"
 
@@ -78,31 +85,38 @@ func main() {
 	}
 	defer engineLedger.Close()
 
+	// Initialize Docker Manager
+	dockerManager, err := docker.NewManager()
+	if err != nil {
+		panic(fmt.Errorf("failed to initialize docker client: %w", err))
+	}
+
+	wg.Add(4)
 	// Start Network Broadcaster using the REAL port
-	go network.StartBroadcaster(finalName, actualPort)
+	go network.StartBroadcaster(ctx, &wg, finalName, actualPort)
 
 	peerRegistry := network.NewPeerRegistry()
 
 	// Load environment variable peers fallback
 	network.LoadStaticPeers(peerRegistry)
 
-	go network.DiscoverPeers(finalName, peerRegistry)
+	go network.DiscoverPeers(ctx, &wg, finalName, peerRegistry)
 
 	// background Checker!
-	go peerRegistry.StartHealthChecker()
+	go peerRegistry.StartHealthChecker(ctx, &wg)
 
 	// Create channels for our inputs
 	approvalChan := make(chan transfer.ApprovalRequest)
 	downloadedChan := make(chan transfer.DownloadResult)
 
-	go transfer.StartReceiver(listener, incomingDir, approvalChan, downloadedChan, engineLedger)
+	go transfer.StartReceiver(ctx, &wg, listener, incomingDir, approvalChan, downloadedChan, engineLedger)
 
 	// If we're in Daemon mode, we want to automatically load downloaded images into the local Docker Daemon
 	if isDaemon {
 		go func() {
 			for result := range downloadedChan {
 				fmt.Println("Unpacking and loading image into Docker Daemon...")
-				if err := docker.LoadAndTag(result.Path, result.ImageName); err != nil {
+				if err := dockerManager.LoadAndTag(result.Path, result.ImageName); err != nil {
 					fmt.Printf("Warning: Failed to load image into Docker: %v\n", err)
 				} else {
 					fmt.Println("Image successfully loaded into Docker!")
@@ -137,11 +151,21 @@ func main() {
 		ApprovalChan:    approvalChan,
 		PendingApproval: &cli.PendingApprovalStore{},
 		DownloadedChan:  downloadedChan,
+		DockerManager:   dockerManager,
 	}
 
 	if isDaemon {
-		api.StartDaemonServer(cliContext, daemonToken)
+		go api.StartDaemonServer(cliContext, daemonToken)
 	} else {
-		cli.Start(cliContext)
+		go cli.Start(cliContext)
 	}
+
+	<-ctx.Done()
+	fmt.Println("\nShutting down Baleen Engine...")
+	
+	// Close listener to unblock StartReceiver
+	listener.Close()
+	
+	wg.Wait()
+	fmt.Println("Shutdown complete.")
 }

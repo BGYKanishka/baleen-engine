@@ -50,7 +50,7 @@ func handlePush(parts []string, rl *readline.Instance, inputChan chan string, sy
 		ForceRawExport: false,
 	}
 
-	exportedFilePath, finalArch, err := exportWithFallback(cfg, rl, inputChan, syncChan)
+	exportedFilePath, finalArch, err := exportWithFallback(ctx, cfg, rl, inputChan, syncChan)
 	if err != nil {
 		fmt.Printf("Export failed: %v\n", err)
 		return
@@ -60,8 +60,8 @@ func handlePush(parts []string, rl *readline.Instance, inputChan chan string, sy
 }
 
 // runs the Docker export
-func exportWithFallback(cfg docker.PreflightConfig, rl *readline.Instance, inputChan chan string, syncChan chan struct{}) (path, arch string, err error) {
-	path, arch, err = docker.ExportImage(cfg)
+func exportWithFallback(ctx EngineContext, cfg docker.PreflightConfig, rl *readline.Instance, inputChan chan string, syncChan chan struct{}) (path, arch string, err error) {
+	path, arch, err = ctx.DockerManager.ExportImage(cfg)
 
 	if err != nil && err.Error() == "ERR_NO_DOCKERFILE" {
 		fmt.Printf("\n No Dockerfile found at '%s'. Cannot autonomously cross-compile.\n", cfg.BuildContext)
@@ -82,7 +82,7 @@ func exportWithFallback(cfg docker.PreflightConfig, rl *readline.Instance, input
 			fmt.Printf("\nRetrying cross-compilation with build context: %s\n", response)
 			cfg.BuildContext = response
 		}
-		path, arch, err = docker.ExportImage(cfg)
+		path, arch, err = ctx.DockerManager.ExportImage(cfg)
 	}
 
 	return

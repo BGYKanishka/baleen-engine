@@ -96,9 +96,14 @@ func (pr *PeerRegistry) RemovePeer(name string) {
 }
 
 // constantly pings known peers to ensure they are still online
-func (pr *PeerRegistry) StartHealthChecker() {
+func (pr *PeerRegistry) StartHealthChecker(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
 	for {
-		time.Sleep(10 * time.Second)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(10 * time.Second):
+		}
 		pr.mu.RLock()
 		checkList := make(map[string]string)
 		for name, addr := range pr.nodes {
@@ -126,80 +131,107 @@ func (pr *PeerRegistry) StartHealthChecker() {
 	}
 }
 
-func StartBroadcaster(nodeName string, port int) {
+func StartBroadcaster(ctx context.Context, wg *sync.WaitGroup, nodeName string, port int) {
+	defer wg.Done()
 	fmt.Printf("Broadcasting presence on local WiFi as '%s' (Port %d)...\n", nodeName, port)
-	go func() {
-		for {
-			// Try to bind to the current WiFi network
-			server, err := zeroconf.Register(nodeName, "_baleen._tcp", "local.", port, nil, nil)
-			if err == nil {
-				time.Sleep(30 * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		// Try to bind to the current WiFi network
+		server, err := zeroconf.Register(nodeName, "_baleen._tcp", "local.", port, nil, nil)
+		if err == nil {
+			select {
+			case <-ctx.Done():
 				server.Shutdown()
-			} else {
-				time.Sleep(5 * time.Second)
+				return
+			case <-time.After(30 * time.Second):
+				server.Shutdown()
+			}
+		} else {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(5 * time.Second):
 			}
 		}
-	}()
+	}
 }
 
 // acts as a Continuous Sweeper
-func DiscoverPeers(currentNodeName string, registry *PeerRegistry) {
-	go func() {
-		for {
-			// Create new resolver every cycle
-			resolver, err := zeroconf.NewResolver(nil)
-			if err != nil {
-				time.Sleep(1 * time.Second)
+func DiscoverPeers(ctx context.Context, wg *sync.WaitGroup, currentNodeName string, registry *PeerRegistry) {
+	defer wg.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		// Create new resolver every cycle
+		resolver, err := zeroconf.NewResolver(nil)
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(1 * time.Second):
 				continue
 			}
+		}
 
-			entries := make(chan *zeroconf.ServiceEntry)
+		entries := make(chan *zeroconf.ServiceEntry)
 
-			// Listen continuously
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		// Listen continuously
+		browseCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 
-			go func(results <-chan *zeroconf.ServiceEntry) {
-				for entry := range results {
-					if entry.Instance != currentNodeName {
+		go func(results <-chan *zeroconf.ServiceEntry) {
+			for entry := range results {
+				if entry.Instance != currentNodeName {
 
-						// Ping all IPs and keep the real one
-						var validAddress string
-						for _, ipAddr := range entry.AddrIPv4 {
-							testAddr := net.JoinHostPort(ipAddr.String(), fmt.Sprint(entry.Port))
-							// fast 500ms ping
-							conn, err := net.DialTimeout("tcp", testAddr, 500*time.Millisecond)
-							if err == nil {
-								conn.Close()
-								validAddress = testAddr
-								break
-							}
+					// Ping all IPs and keep the real one
+					var validAddress string
+					for _, ipAddr := range entry.AddrIPv4 {
+						testAddr := net.JoinHostPort(ipAddr.String(), fmt.Sprint(entry.Port))
+						// fast 500ms ping
+						conn, err := net.DialTimeout("tcp", testAddr, 500*time.Millisecond)
+						if err == nil {
+							conn.Close()
+							validAddress = testAddr
+							break
 						}
-
-						if validAddress == "" {
-							continue
-						}
-
-						prMap := registry.GetAllPeers()
-						if _, exists := prMap[entry.Instance]; !exists {
-							if registry.Log != nil {
-								fmt.Fprintf(registry.Log, "[Discovery] Found Remote Peer: %s (IP: %s)\n", entry.Instance, validAddress)
-							}
-						}
-
-						registry.AddPeer(entry.Instance, validAddress)
 					}
+
+					if validAddress == "" {
+						continue
+					}
+
+					prMap := registry.GetAllPeers()
+					if _, exists := prMap[entry.Instance]; !exists {
+						if registry.Log != nil {
+							fmt.Fprintf(registry.Log, "[Discovery] Found Remote Peer: %s (IP: %s)\n", entry.Instance, validAddress)
+						}
+					}
+
+					registry.AddPeer(entry.Instance, validAddress)
 				}
-			}(entries)
-
-			err = resolver.Browse(ctx, "_baleen._tcp", "local.", entries)
-			if err != nil {
-				fmt.Println("Failed to browse network:", err)
 			}
+		}(entries)
 
-			<-ctx.Done()
+		err = resolver.Browse(browseCtx, "_baleen._tcp", "local.", entries)
+		if err != nil {
+			fmt.Println("Failed to browse network:", err)
+		}
+
+		select {
+		case <-ctx.Done():
+			cancel()
+			return
+		case <-browseCtx.Done():
 			cancel()
 		}
-	}()
+	}
 }
 
 // Additional methods for API integration

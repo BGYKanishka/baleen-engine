@@ -6,7 +6,7 @@ import (
 	"os/exec"
 )
 
-func silentlyResolveArchitecture(imageName string, targetPlatform string, buildContext string) (string, error) {
+func (m *Manager) silentlyResolveArchitecture(imageName string, targetPlatform string, buildContext string) (string, error) {
 	tempExportTag := fmt.Sprintf("%s-baleen-tmp", imageName)
 
 	fmt.Printf("\nArchitecture mismatch detected. Cross-compiling %s for %s locally...\n", imageName, targetPlatform)

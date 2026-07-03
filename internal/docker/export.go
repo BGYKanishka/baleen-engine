@@ -5,18 +5,17 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
-	"github.com/docker/docker/client"
+	"github.com/docker/docker/api/types/image"
 )
 
 // is the main entry point
-func ExportImage(config PreflightConfig) (string, string, error) {
+func (m *Manager) ExportImage(config PreflightConfig) (string, string, error) {
 	fmt.Printf("Running pre-flight architecture checks for %s...\n", config.ImageName)
 
-	report := runPreflightHandshake(config)
+	report := m.RunPreflightHandshake(config)
 	if !report.Passed {
 		return "", "", fmt.Errorf("export aborted due to fatal errors: %v", report.FatalErrors)
 	}
@@ -32,7 +31,7 @@ func ExportImage(config PreflightConfig) (string, string, error) {
 			fmt.Println("No Dockerfile found. Falling back to raw export (receiver will use emulation).")
 			config.ForceRawExport = true
 		} else {
-			resolvedImage, err := silentlyResolveArchitecture(config.ImageName, report.TargetPlatform, config.BuildContext)
+			resolvedImage, err := m.silentlyResolveArchitecture(config.ImageName, report.TargetPlatform, config.BuildContext)
 			if err != nil {
 				return "", "", fmt.Errorf("failed to resolve architecture: %w", err)
 			}
@@ -47,25 +46,22 @@ func ExportImage(config PreflightConfig) (string, string, error) {
 	}
 
 	fmt.Printf("Exporting %s to tarball...\n", imageToExport)
-	tarballPath, err := saveToTarball(imageToExport, config.ExportDir)
+	tarballPath, err := m.saveToTarball(imageToExport, config.ExportDir)
 
 	if isTempImage {
 		fmt.Printf("Engine Cleanup: Removing temporary cross-compiled image (%s)...\n", imageToExport)
-		exec.Command("docker", "rmi", imageToExport).Run()
+		_, cleanupErr := m.Cli.ImageRemove(context.Background(), imageToExport, image.RemoveOptions{Force: true, PruneChildren: true})
+		if cleanupErr != nil {
+			fmt.Printf("Warning: failed to remove temporary cross-compiled image (%s): %v\n", imageToExport, cleanupErr)
+		}
 	}
 
 	return tarballPath, finalArch, err
 }
 
-func GetImageLayers(imageName string) ([]string, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return nil, err
-	}
-	defer cli.Close()
-
+func (m *Manager) GetImageLayers(imageName string) ([]string, error) {
 	ctx := context.Background()
-	inspectData, _, err := cli.ImageInspectWithRaw(ctx, imageName)
+	inspectData, _, err := m.Cli.ImageInspectWithRaw(ctx, imageName)
 	if err != nil {
 		return nil, err
 	}
@@ -74,15 +70,9 @@ func GetImageLayers(imageName string) ([]string, error) {
 }
 
 // saves the specified image as a tarball in the export directory, returning the path to the tarball
-func saveToTarball(imageName string, exportDir string) (string, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return "", err
-	}
-	defer cli.Close()
-
+func (m *Manager) saveToTarball(imageName string, exportDir string) (string, error) {
 	ctx := context.Background()
-	imageStream, err := cli.ImageSave(ctx, []string{imageName})
+	imageStream, err := m.Cli.ImageSave(ctx, []string{imageName})
 	if err != nil {
 		return "", err
 	}
