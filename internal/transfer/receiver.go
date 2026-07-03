@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -33,7 +34,7 @@ func StartReceiver(ctx context.Context, wg *sync.WaitGroup, listener net.Listene
 			case <-ctx.Done():
 				return
 			default:
-				fmt.Println("Failed to accept connection:", err)
+				slog.Error("failed to accept connection", "error", err)
 				continue
 			}
 		}
@@ -59,14 +60,14 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 
 	_, _, dbPath, err := config.SetupBaleenDirectory()
 	if err != nil {
-		fmt.Println("Error getting directories:", err)
+		slog.Error("error getting directories", "error", err)
 		return
 	}
 
 	missingLayers, alreadyOwnedLayers := partitionLayers(req.Layers, engineLedger)
 
 	if err := encoder.Encode(TransferResponse{Approved: true, MissingLayers: missingLayers}); err != nil {
-		fmt.Println("Failed to send negotiation response:", err)
+		slog.Error("failed to send negotiation response", "error", err)
 		return
 	}
 
@@ -75,7 +76,7 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	//pass req metadata into downloadPayload
 	targetPath, err := downloadPayload(decoder, conn, incomingDir, req.ImageName, req.Author)
 	if err != nil {
-		fmt.Println(err)
+		slog.Error("error occurred", "error", err)
 		GlobalHub.Publish(ProgressEvent{
 			Direction: "pull", Image: req.ImageName, Peer: req.Author,
 			Progress: 0, Speed: "", Status: "failed",
@@ -85,7 +86,7 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 
 	reconstructedPath, err := reconstructTarball(targetPath, incomingDir, req, layerCacheDir, alreadyOwnedLayers)
 	if err != nil {
-		fmt.Println(err)
+		slog.Error("error occurred", "error", err)
 		os.Remove(targetPath)
 		return
 	}
@@ -119,7 +120,7 @@ func receiveAndApprove(decoder *json.Decoder, encoder *json.Encoder, approvalCha
 	// Block until approve/reject is called
 	if approved := <-respChan; !approved {
 		encoder.Encode(TransferResponse{Approved: false})
-		fmt.Println("\nTransfer rejected.")
+		slog.Info("transfer rejected")
 		return req, false
 	}
 	return req, true
@@ -153,7 +154,7 @@ func downloadPayload(decoder *json.Decoder, conn net.Conn, incomingDir string, i
 		return "", fmt.Errorf("failed to create incoming file: %w", err)
 	}
 
-	fmt.Printf("\nDownloading optimized payload to: %s\n", targetPath)
+	slog.Info("downloading optimized payload", "path", targetPath)
 
 	//track progress
 	pw := newProgressWriter(file, streamHeader.PrunedSize, image, peer, "pull")
@@ -170,7 +171,7 @@ func downloadPayload(decoder *json.Decoder, conn net.Conn, incomingDir string, i
 		Progress: 100, Speed: "0.00 MB/s", Status: "completed",
 	})
 
-	fmt.Println("Verifying payload integrity...")
+	slog.Info("verifying payload integrity")
 	actualHash, err := ledger.GenerateHash(targetPath)
 	if err != nil {
 		os.Remove(targetPath)
@@ -186,7 +187,7 @@ func downloadPayload(decoder *json.Decoder, conn net.Conn, incomingDir string, i
 		return "", fmt.Errorf("INTEGRITY FAILURE: checksum mismatch\nExpected: %s\nActual:   %s", streamHeader.PrunedHash, actualHash)
 	}
 
-	fmt.Printf("Successfully received %d MB!\n", bytesReceived/1024/1024)
+	slog.Info("successfully received payload", "sizeMB", bytesReceived/1024/1024)
 	return targetPath, nil
 }
 
@@ -194,7 +195,7 @@ func downloadPayload(decoder *json.Decoder, conn net.Conn, incomingDir string, i
 func reconstructTarball(targetPath string, incomingDir string, req TransferRequest, layerCacheDir string, alreadyOwnedLayers []string) (string, error) {
 	reconstructedPath := filepath.Join(incomingDir, "ready_"+req.Hash[:8]+".tar")
 
-	fmt.Println("Stitching cached layers back into payload...")
+	slog.Info("stitching cached layers back into payload")
 	if err := StitchTarball(targetPath, reconstructedPath, layerCacheDir, req.Layers, alreadyOwnedLayers); err != nil {
 		return "", fmt.Errorf("stitching failed: %w", err)
 	}
@@ -208,15 +209,15 @@ func warnOnArchMismatch(req TransferRequest) {
 		return
 	}
 
-	fmt.Println("\n==================================================")
-	fmt.Println("ARCHITECTURE MISMATCH DETECTED ON ARRIVAL ")
-	fmt.Println("==================================================")
-	fmt.Printf(" This image is built for '%s'.\n", req.ImageArch)
-	fmt.Printf(" Your machine is running '%s'.\n", localArch)
-	fmt.Println(" Docker will use QEMU/Rosetta emulation to run it.")
-	fmt.Println("\n To start this container, use the following command:")
-	fmt.Printf("   docker run --platform %s %s\n", req.ImageArch, req.ImageName)
-	fmt.Println("\n==================================================")
+	slog.Warn("==================================================")
+	slog.Warn("ARCHITECTURE MISMATCH DETECTED ON ARRIVAL")
+	slog.Warn("==================================================")
+	slog.Warn("image architecture mismatch", "builtFor", req.ImageArch)
+	slog.Warn("local architecture", "localArch", localArch)
+	slog.Warn("emulation warning")
+	slog.Warn("start command hint")
+	slog.Warn("docker run command", "command", "docker run --platform "+req.ImageArch+" "+req.ImageName)
+	slog.Warn("==================================================")
 }
 
 // extracts new layers from the rebuilt tarball and records
@@ -225,18 +226,18 @@ func updateCacheAndLedger(reconstructedPath string, layerCacheDir string, allLay
 		return
 	}
 
-	fmt.Println("Extracting new layers to local cache...")
+	slog.Info("extracting new layers to local cache")
 	if err := ExtractAndCacheLayers(reconstructedPath, layerCacheDir, allLayers); err != nil {
-		fmt.Printf("Warning: Failed to cache new layers: %v\n", err)
+		slog.Error("failed to cache new layers", "error", err)
 		return
 	}
 
 	if err := engineLedger.MarkLayersAsOwned(missingLayers); err != nil {
-		fmt.Printf("Warning: Failed to update ledger cache database: %v\n", err)
+		slog.Error("failed to update ledger cache database", "error", err)
 		return
 	}
 
-	fmt.Printf("Successfully cached %d new layers for future delta transfers.\n", len(missingLayers))
+	slog.Info("successfully cached new layers", "count", len(missingLayers))
 }
 
 // writes a transfer entry to the ledger history
@@ -250,7 +251,6 @@ func recordCommit(req TransferRequest, engineLedger *ledger.Ledger) {
 		Status:    "Completed",
 	}
 	if err := engineLedger.RecordCommit(commit); err != nil {
-		fmt.Printf("Warning: Failed to write transfer to ledger: %v\n", err)
+		slog.Error("failed to write transfer to ledger", "error", err)
 	}
 }
-

@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,7 +84,7 @@ func writeCachedLayer(tr *tar.Reader, cacheDir string, digest string) error {
 	}
 	defer outFile.Close()
 
-	fmt.Printf("Caching layer: %s\n", digest[:15]+"...")
+	slog.Info("caching layer", "digest", digest[:15]+"...")
 	_, err = io.Copy(outFile, tr)
 	return err
 }

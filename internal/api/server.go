@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -37,7 +38,7 @@ func StartDaemonServer(ctx cli.EngineContext, token string) {
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to start daemon listener: %v\n", err)
+		slog.Error("failed to start daemon listener", "error", err)
 		os.Exit(1)
 	}
 

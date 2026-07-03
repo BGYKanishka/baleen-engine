@@ -3,7 +3,7 @@ package network
 import (
 	"context"
 	"fmt"
-	"io"
+	"log/slog"
 	"net"
 	"os"
 	"strings"
@@ -26,7 +26,6 @@ type PeerRegistry struct {
 	mu       sync.RWMutex
 	nodes    map[string]string
 	metadata map[string]*PeerMeta
-	Log      io.Writer
 }
 
 func NewPeerRegistry() *PeerRegistry {
@@ -115,9 +114,7 @@ func (pr *PeerRegistry) StartHealthChecker(ctx context.Context, wg *sync.WaitGro
 			conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 			if err != nil {
 				pr.RemovePeer(name)
-				if pr.Log != nil {
-					fmt.Fprintf(pr.Log, "[Network] Peer disconnected: %s\n", name)
-				}
+				slog.Info("peer disconnected", "peer", name)
 			} else {
 				conn.Close()
 				// Update last seen for the API
@@ -133,7 +130,7 @@ func (pr *PeerRegistry) StartHealthChecker(ctx context.Context, wg *sync.WaitGro
 
 func StartBroadcaster(ctx context.Context, wg *sync.WaitGroup, nodeName string, port int) {
 	defer wg.Done()
-	fmt.Printf("Broadcasting presence on local WiFi as '%s' (Port %d)...\n", nodeName, port)
+	slog.Info("broadcasting presence on local WiFi", "nodeName", nodeName, "port", port)
 	for {
 		select {
 		case <-ctx.Done():
@@ -209,9 +206,7 @@ func DiscoverPeers(ctx context.Context, wg *sync.WaitGroup, currentNodeName stri
 
 					prMap := registry.GetAllPeers()
 					if _, exists := prMap[entry.Instance]; !exists {
-						if registry.Log != nil {
-							fmt.Fprintf(registry.Log, "[Discovery] Found Remote Peer: %s (IP: %s)\n", entry.Instance, validAddress)
-						}
+						slog.Info("found remote peer", "peer", entry.Instance, "ip", validAddress)
 					}
 
 					registry.AddPeer(entry.Instance, validAddress)
@@ -221,7 +216,7 @@ func DiscoverPeers(ctx context.Context, wg *sync.WaitGroup, currentNodeName stri
 
 		err = resolver.Browse(browseCtx, "_baleen._tcp", "local.", entries)
 		if err != nil {
-			fmt.Println("Failed to browse network:", err)
+			slog.Error("failed to browse network", "error", err)
 		}
 
 		select {

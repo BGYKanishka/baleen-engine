@@ -3,6 +3,7 @@ package cli
 import (
 	"crypto/tls"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/BGYKanishka/baleen-engine/internal/docker"
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
+	"github.com/BGYKanishka/baleen-engine/internal/logger"
 	"github.com/BGYKanishka/baleen-engine/internal/network"
 	"github.com/BGYKanishka/baleen-engine/internal/transfer"
 	"github.com/chzyer/readline"
@@ -66,7 +68,7 @@ func Start(ctx EngineContext) {
 		panic(err)
 	}
 	defer rl.Close()
-	ctx.PeerRegistry.Log = rl.Stdout()
+	logger.InitLogger(false, rl.Stdout())
 
 	inputChan := make(chan string)
 	syncChan := make(chan struct{})
@@ -123,7 +125,7 @@ func feedInput(rl *readline.Instance, inputChan chan string, syncChan chan struc
 func handleDownload(result transfer.DownloadResult, rl *readline.Instance, ctx EngineContext) {
 	fmt.Println("\nUnpacking and loading image into Docker Daemon...")
 	if err := ctx.DockerManager.LoadAndTag(result.Path, result.ImageName); err != nil {
-		fmt.Println("Failed to load image into Docker:", err)
+		slog.Error("failed to load image into Docker", "error", err)
 	} else {
 		fmt.Println("Image successfully loaded and tagged! (Type 'docker images' in another terminal to verify)")
 	}

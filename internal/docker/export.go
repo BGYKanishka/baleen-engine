@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,7 @@ import (
 
 // is the main entry point
 func (m *Manager) ExportImage(config PreflightConfig) (string, string, error) {
-	fmt.Printf("Running pre-flight architecture checks for %s...\n", config.ImageName)
+	slog.Info("running pre-flight architecture checks", "image", config.ImageName)
 
 	report := m.RunPreflightHandshake(config)
 	if !report.Passed {
@@ -28,7 +29,7 @@ func (m *Manager) ExportImage(config PreflightConfig) (string, string, error) {
 	if report.RequiresCrossBuild && !config.ForceRawExport {
 		dockerfilePath := filepath.Join(config.BuildContext, "Dockerfile")
 		if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
-			fmt.Println("No Dockerfile found. Falling back to raw export (receiver will use emulation).")
+			slog.Warn("no Dockerfile found, falling back to raw export")
 			config.ForceRawExport = true
 		} else {
 			resolvedImage, err := m.silentlyResolveArchitecture(config.ImageName, report.TargetPlatform, config.BuildContext)
@@ -42,17 +43,17 @@ func (m *Manager) ExportImage(config PreflightConfig) (string, string, error) {
 	}
 
 	if config.ForceRawExport {
-		fmt.Printf("Forcing Raw Export. Sending '%s' natively...\n", finalArch)
+		slog.Info("forcing raw export", "arch", finalArch)
 	}
 
-	fmt.Printf("Exporting %s to tarball...\n", imageToExport)
+	slog.Info("exporting to tarball", "image", imageToExport)
 	tarballPath, err := m.saveToTarball(imageToExport, config.ExportDir)
 
 	if isTempImage {
-		fmt.Printf("Engine Cleanup: Removing temporary cross-compiled image (%s)...\n", imageToExport)
+		slog.Info("removing temporary cross-compiled image", "image", imageToExport)
 		_, cleanupErr := m.Cli.ImageRemove(context.Background(), imageToExport, image.RemoveOptions{Force: true, PruneChildren: true})
 		if cleanupErr != nil {
-			fmt.Printf("Warning: failed to remove temporary cross-compiled image (%s): %v\n", imageToExport, cleanupErr)
+			slog.Error("failed to remove temporary cross-compiled image", "image", imageToExport, "error", cleanupErr)
 		}
 	}
 

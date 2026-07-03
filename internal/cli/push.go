@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -20,7 +21,7 @@ func handlePush(parts []string, rl *readline.Instance, inputChan chan string, sy
 
 	targetIP, targetPort, err := network.ResolveTargetAddress(ctx.PeerRegistry, parts[1])
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
+		slog.Error("failed to resolve target", "error", err)
 		return
 	}
 	if _, ok := ctx.PeerRegistry.GetAllPeers()[parts[1]]; ok {
@@ -52,7 +53,7 @@ func handlePush(parts []string, rl *readline.Instance, inputChan chan string, sy
 
 	exportedFilePath, finalArch, err := exportWithFallback(ctx, cfg, rl, inputChan, syncChan)
 	if err != nil {
-		fmt.Printf("Export failed: %v\n", err)
+		slog.Error("export failed", "error", err)
 		return
 	}
 
@@ -98,7 +99,7 @@ func recordAndPush(ctx EngineContext, exportedPath, image, arch, targetIP string
 	status := "Completed"
 	if pushErr != nil {
 		status = "Failed"
-		fmt.Println("Push failed:", pushErr)
+		slog.Error("push failed", "error", pushErr)
 	}
 	commit := ledger.Commit{
 		Hash:      hash,
@@ -109,6 +110,6 @@ func recordAndPush(ctx EngineContext, exportedPath, image, arch, targetIP string
 		Status:    status,
 	}
 	if err := ctx.EngineLedger.RecordCommit(commit); err != nil {
-		fmt.Printf("Warning: Failed to write transfer to ledger: %v\n", err)
+		slog.Error("failed to write transfer to ledger", "error", err)
 	}
 }

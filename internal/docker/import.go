@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 
 	"github.com/docker/docker/api/types/image"
@@ -52,7 +53,7 @@ func (m *Manager) LoadAndTag(filePath, imageName string) error {
 	}
 
 	if _, err := m.Cli.ImageRemove(ctx, tmpName, image.RemoveOptions{Force: true, PruneChildren: true}); err != nil {
-		fmt.Printf("Warning: failed to remove temporary tag %s: %v\n", tmpName, err)
+		slog.Error("failed to remove temporary tag", "tag", tmpName, "error", err)
 	}
 
 	return nil

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/BGYKanishka/baleen-engine/internal/config"
 	"github.com/BGYKanishka/baleen-engine/internal/docker"
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
+	"github.com/BGYKanishka/baleen-engine/internal/logger"
 	"github.com/BGYKanishka/baleen-engine/internal/network"
 	"github.com/BGYKanishka/baleen-engine/internal/transfer"
 )
@@ -28,6 +30,7 @@ func main() {
 	var wg sync.WaitGroup
 	// Detect Daemon Mode vs Standard CLI
 	isDaemon := len(os.Args) > 1 && os.Args[1] == "daemon"
+	logger.InitLogger(isDaemon, os.Stdout)
 
 	var finalName string
 	var targetPort int
@@ -56,14 +59,16 @@ func main() {
 	}
 	tlsConfig, err := network.GenerateEphemeralTLS()
 	if err != nil {
-		panic(fmt.Errorf("failed to generate TLS config: %w", err))
+		slog.Error("failed to generate TLS config", "error", err)
+		os.Exit(1)
 	}
 
 	//Start the TLS Listener and grab the port
 	address := fmt.Sprintf(":%d", targetPort)
 	listener, err := tls.Listen("tcp", address, tlsConfig)
 	if err != nil {
-		panic(fmt.Errorf("failed to bind network port: %w", err))
+		slog.Error("failed to bind network port", "error", err)
+		os.Exit(1)
 	}
 
 	//Extract the actual port
@@ -76,19 +81,22 @@ func main() {
 	// Setup Environment
 	tempDir, incomingDir, dbPath, err := config.SetupBaleenDirectory()
 	if err != nil {
-		panic(fmt.Errorf("failed to setup directories: %w", err))
+		slog.Error("failed to setup directories", "error", err)
+		os.Exit(1)
 	}
 	// Initialize the persistent Ledger DB
 	engineLedger, err := ledger.NewLedger(dbPath)
 	if err != nil {
-		panic(fmt.Errorf("failed to open ledger database: %w", err))
+		slog.Error("failed to open ledger database", "error", err)
+		os.Exit(1)
 	}
 	defer engineLedger.Close()
 
 	// Initialize Docker Manager
 	dockerManager, err := docker.NewManager()
 	if err != nil {
-		panic(fmt.Errorf("failed to initialize docker client: %w", err))
+		slog.Error("failed to initialize docker client", "error", err)
+		os.Exit(1)
 	}
 
 	wg.Add(4)
@@ -115,11 +123,11 @@ func main() {
 	if isDaemon {
 		go func() {
 			for result := range downloadedChan {
-				fmt.Println("Unpacking and loading image into Docker Daemon...")
+				slog.Info("Unpacking and loading image into Docker Daemon...")
 				if err := dockerManager.LoadAndTag(result.Path, result.ImageName); err != nil {
-					fmt.Printf("Warning: Failed to load image into Docker: %v\n", err)
+					slog.Warn("Failed to load image into Docker", "error", err)
 				} else {
-					fmt.Println("Image successfully loaded into Docker!")
+					slog.Info("Image successfully loaded into Docker!")
 					os.Remove(result.Path)
 				}
 			}
@@ -135,7 +143,7 @@ func main() {
 			})
 
 			if err := http.ListenAndServe(fmt.Sprintf(":%d", metadataPort), mux); err != nil && err != http.ErrServerClosed {
-				fmt.Println("Metadata server error:", err)
+				slog.Error("Metadata server error", "error", err)
 			}
 		}()
 	}
@@ -161,11 +169,11 @@ func main() {
 	}
 
 	<-ctx.Done()
-	fmt.Println("\nShutting down Baleen Engine...")
+	slog.Info("Shutting down Baleen Engine...")
 	
 	// Close listener to unblock StartReceiver
 	listener.Close()
 	
 	wg.Wait()
-	fmt.Println("Shutdown complete.")
+	slog.Info("Shutdown complete.")
 }

@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 )
 
@@ -83,7 +84,7 @@ func copyTarExcluding(inPath string, outPath string, skipFiles map[string]bool) 
 		}
 
 		if skipFiles[hdr.Name] {
-			fmt.Printf("Pruning duplicate layer payload: %s\n", hdr.Name)
+			slog.Info("pruning duplicate layer payload", "layer", hdr.Name)
 			continue
 		}
 

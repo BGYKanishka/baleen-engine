@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"strconv"
@@ -58,7 +59,7 @@ func inspectTarball(filePath string) (int64, []string, error) {
 	layers, err := getLayersFromTarball(filePath)
 	if err != nil {
 		// Non-fatal: receiver will treat all layers as missing
-		fmt.Printf("Warning: Failed to extract tarball layers: %v\n", err)
+		slog.Error("failed to extract tarball layers", "error", err)
 	}
 
 	return info.Size(), layers, nil
@@ -67,7 +68,7 @@ func inspectTarball(filePath string) (int64, []string, error) {
 // opens a TLS connection to the remote node
 func dialReceiver(targetIP string, port int, tlsConfig *tls.Config) (*tls.Conn, error) {
 	address := net.JoinHostPort(targetIP, strconv.Itoa(port))
-	fmt.Printf("Connecting to remote node at %s...\n", address)
+	slog.Info("connecting to remote node", "address", address)
 
 	conn, err := tls.Dial("tcp", address, tlsConfig)
 	if err != nil {
@@ -78,7 +79,7 @@ func dialReceiver(targetIP string, port int, tlsConfig *tls.Config) (*tls.Conn, 
 
 // sends the transfer request and returns the list of layers the receiver is missing
 func negotiate(encoder *json.Encoder, decoder *json.Decoder, imageName string, hash string, author string, imageArch string, fileSize int64, layers []string) ([]string, error) {
-	fmt.Println("Sending transfer request metadata...")
+	slog.Info("sending transfer request metadata")
 
 	req := TransferRequest{
 		ImageName: imageName,
@@ -92,7 +93,7 @@ func negotiate(encoder *json.Encoder, decoder *json.Decoder, imageName string, h
 		return nil, fmt.Errorf("failed to send handshake: %w", err)
 	}
 
-	fmt.Println("Waiting for receiver to approve the transfer...")
+	slog.Info("waiting for receiver to approve the transfer")
 
 	var response TransferResponse
 	if err := decoder.Decode(&response); err != nil {
@@ -103,7 +104,7 @@ func negotiate(encoder *json.Encoder, decoder *json.Decoder, imageName string, h
 		return nil, fmt.Errorf("transfer rejected by remote node")
 	}
 
-	fmt.Printf("Request approved! Receiver is missing %d layers. Pruning tarball...\n", len(response.MissingLayers))
+	slog.Info("request approved, pruning tarball", "missingLayers", len(response.MissingLayers))
 	return response.MissingLayers, nil
 }
 
@@ -139,7 +140,7 @@ func streamPayload(encoder *json.Encoder, conn *tls.Conn, prunedPath string, pru
 		return fmt.Errorf("failed to send stream header: %w", err)
 	}
 
-	fmt.Println("Streaming optimized file data...")
+	slog.Info("streaming optimized file data")
 
 	prunedFile, err := os.Open(prunedPath)
 	if err != nil {
@@ -171,6 +172,6 @@ func streamPayload(encoder *json.Encoder, conn *tls.Conn, prunedPath string, pru
 		Status:    "completed",
 	})
 
-	fmt.Printf("Successfully pushed %.2f MB to %s!\n", float64(bytesSent)/1024.0/1024.0, targetIP)
+	slog.Info("successfully pushed", "sizeMB", float64(bytesSent)/1024.0/1024.0, "target", targetIP)
 	return nil
 }

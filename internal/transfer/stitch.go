@@ -2,8 +2,8 @@ package transfer
 
 import (
 	"archive/tar"
-	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,7 +116,7 @@ func injectOneLayer(tw *tar.Writer, layerCacheDir string, digest string, pathMap
 		return err
 	}
 
-	fmt.Printf("Stitching cached layer back into payload: %s\n", hdr.Name)
+	slog.Info("stitching cached layer back into payload", "layer", hdr.Name)
 	_, err = io.Copy(tw, layerFile)
 	return err
 }
