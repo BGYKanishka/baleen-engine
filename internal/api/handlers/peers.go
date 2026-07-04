@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -35,6 +36,14 @@ func Peers(ctx cli.EngineContext) http.HandlerFunc {
 					LastSeen: node.LastSeen,
 				})
 			}
+
+			sort.Slice(response, func(i, j int) bool {
+				if response[i].Status != response[j].Status {
+					return response[i].Status == "reachable"
+				}
+				return response[i].Hostname < response[j].Hostname
+			})
+
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(response)
 

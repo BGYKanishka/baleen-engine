@@ -108,6 +108,14 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 		hash = tempID
 	} else {
 		ctx.EngineLedger.DeleteCommit(tempID)
+		ctx.EngineLedger.RecordCommit(ledger.Commit{
+			Hash:      hash,
+			Image:     image,
+			Author:    ctx.NodeName,
+			Timestamp: time.Now().Format(time.RFC3339),
+			Direction: "Exporting",
+			Status:    "Pending",
+		})
 	}
 
 	pushErr := transfer.PushImage(targetIP, port, fingerprint, exportedFilePath, image, hash, ctx.NodeName, arch, ctx.TLSConfig)

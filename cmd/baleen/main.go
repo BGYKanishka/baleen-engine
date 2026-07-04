@@ -3,15 +3,16 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
-	"runtime"
 	"sync"
+	"syscall"
+	"time"
 
 	"github.com/BGYKanishka/baleen-engine/internal/api"
 	"github.com/BGYKanishka/baleen-engine/internal/cli"
@@ -20,41 +21,117 @@ import (
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
 	"github.com/BGYKanishka/baleen-engine/internal/logger"
 	"github.com/BGYKanishka/baleen-engine/internal/network"
+	"github.com/BGYKanishka/baleen-engine/internal/service"
 	"github.com/BGYKanishka/baleen-engine/internal/transfer"
 )
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stop()
+	//STATUS CHECK: If the user runs `baleen status`, we check if a background service is running and print its connection info.
+	if len(os.Args) > 1 && os.Args[1] == "status" {
+		if existing, err := service.ReadState(); err == nil && service.IsAlive(existing) {
+			out := map[string]any{
+				"status":    "running",
+				"port":      existing.Port,
+				"token":     existing.Token,
+				"node_name": existing.NodeName,
+			}
+			data, _ := json.Marshal(out)
+			fmt.Println(string(data))
+		} else {
+			fmt.Println(`{"status":"stopped"}`)
+		}
+		return
+	}
 
-	var wg sync.WaitGroup
-	// Detect Daemon Mode vs Standard CLI
 	isDaemon := len(os.Args) > 1 && os.Args[1] == "daemon"
-	logger.InitLogger(isDaemon, os.Stdout)
+	isBackground := service.IsBackgroundProcess()
 
+	logger.InitLogger(isDaemon && isBackground, os.Stdout)
+
+	// LAUNCHER MODE: If the user runs `baleen daemon` from the UI, we spawn a fully detached background process and return immediately with the connection info.
+	if isDaemon && !isBackground {
+		runLauncher()
+		return
+	}
+
+	// BACKGROUND DAEMON : If the user runs `baleen daemon` from the CLI, we start a background daemon that listens for incoming connections and serves the HTTP API.
+	var daemonToken string
 	var finalName string
 	var targetPort int
-	var daemonToken string
 
 	if isDaemon {
+		// Daemon mode: parse daemon-specific flags.
 		daemonFlags := flag.NewFlagSet("daemon", flag.ExitOnError)
 		daemonFlags.StringVar(&daemonToken, "token", "", "Authorization token for the UI API")
+		daemonFlags.StringVar(&finalName, "name", "auto", "Name of the Baleen Node")
 		daemonFlags.Parse(os.Args[2:])
-		finalName = config.GenerateNodeName()
+		if finalName == "auto" {
+			finalName = config.GenerateNodeName()
+		}
 		targetPort = 0
 	} else {
-		nodeName := flag.String("name", "auto", "Name of the Baleen Node (leave blank for random)")
-		port := flag.Int("port", 0, "Port for the Baleen Node (0 for auto-assign)")
+		// CLI mode: parse standard flags.
+		nodeName := flag.String("name", "auto", "Name of the Baleen Node")
 		flag.Parse()
-
 		finalName = *nodeName
 		if finalName == "auto" {
 			finalName = config.GenerateNodeName()
 		}
-		targetPort = *port
 	}
 
-	// Setup Environment
+	// CLI CLIENT : If the user runs `baleen` without `daemon`,
+	// check if a background service is running. If not, we spawn one and then connect to it.
+	if !isDaemon {
+		tempDir, _, _, _, err := config.SetupBaleenDirectory()
+		if err != nil {
+			slog.Error("failed to setup directories", "error", err)
+			os.Exit(1)
+		}
+
+		existing, err := service.ReadState()
+		if err != nil || !service.IsAlive(existing) {
+			fmt.Printf("No background service found — spawning Baleen daemon...\n")
+			// Launch the background daemon!
+			// The UI's status probe will pick up this auto-generated token later if needed.
+			token := "cli-" + config.GenerateNodeName()
+			if err := service.LaunchBackground(token, finalName); err != nil {
+				slog.Error("failed to launch background service", "error", err)
+				os.Exit(1)
+			}
+
+			// Wait for it to become ready
+			state, err := service.WaitForReady(30 * time.Second)
+			if err != nil {
+				slog.Error("background service did not become ready in time", "error", err)
+				os.Exit(1)
+			}
+			existing = state
+		}
+
+		// Connect to the running daemon
+		cli.StartClientREPL(existing, tempDir)
+		return
+	}
+
+	// BACKGROUND DAEMON : If we reach this point, we are running as a background daemon .
+	ok, err := service.TryAcquireLock()
+	if err != nil {
+		slog.Error("failed to acquire service lock", "error", err)
+		os.Exit(1)
+	}
+	if !ok {
+		// Lost the race to another background process
+		slog.Info("another daemon instance is starting; waiting for it to become ready")
+		state, err := service.WaitForReady(30 * time.Second)
+		if err != nil {
+			slog.Error("timed out waiting for peer daemon", "error", err)
+			os.Exit(1)
+		}
+		emitReady(state.Port, state.Token, state.NodeName)
+		return
+	}
+
+	// Engine startup logic
 	tempDir, incomingDir, dbPath, certsDir, err := config.SetupBaleenDirectory()
 	if err != nil {
 		slog.Error("failed to setup directories", "error", err)
@@ -76,11 +153,7 @@ func main() {
 	}
 
 	//Extract the actual port
-	actualPort := listener.Addr().(*net.TCPAddr).Port
-
-	if !isDaemon {
-		fmt.Printf("Starting Baleen Engine as '%s' on Port %d...\n", finalName, actualPort)
-	}
+	p2pPort := listener.Addr().(*net.TCPAddr).Port
 
 	// Initialize the persistent Ledger DB
 	engineLedger, err := ledger.NewLedger(dbPath)
@@ -89,7 +162,6 @@ func main() {
 		os.Exit(1)
 	}
 	defer engineLedger.Close()
-
 	// Initialize Docker Manager
 	dockerManager, err := docker.NewManager()
 	if err != nil {
@@ -97,60 +169,53 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Set up a channel to listen for stop requests from the API.
+	stopCh := make(chan struct{}, 1)
+
+	// Set up signal handling for graceful shutdown on SIGINT or SIGTERM.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Bridge /api/stop into context cancellation.
+	go func() {
+		select {
+		case <-stopCh:
+			slog.Info("stop requested via API")
+			stop()
+		case <-ctx.Done():
+		}
+	}()
+
+	var wg sync.WaitGroup
 	wg.Add(4)
-	// Start Network Broadcaster using the REAL port
-	go network.StartBroadcaster(ctx, &wg, finalName, actualPort, nodeFingerprint)
 
+	// Start P2P network (mDNS broadcaster, discovery, health checker).
+	go network.StartBroadcaster(ctx, &wg, finalName, p2pPort, nodeFingerprint)
 	peerRegistry := network.NewPeerRegistry()
-
-	// Load environment variable peers fallback
 	network.LoadStaticPeers(peerRegistry)
-
 	go network.DiscoverPeers(ctx, &wg, finalName, peerRegistry)
-
-	// background Checker!
 	go peerRegistry.StartHealthChecker(ctx, &wg)
 
-	// Create channels for our inputs
 	approvalChan := make(chan transfer.ApprovalRequest)
 	downloadedChan := make(chan transfer.DownloadResult)
-
 	go transfer.StartReceiver(ctx, &wg, listener, incomingDir, approvalChan, downloadedChan, engineLedger)
 
-	// If we're in Daemon mode, we want to automatically load downloaded images into the local Docker Daemon
-	if isDaemon {
-		go func() {
-			for result := range downloadedChan {
-				slog.Info("Unpacking and loading image into Docker Daemon...")
-				if err := dockerManager.LoadAndTag(result.Path, result.ImageName); err != nil {
-					slog.Warn("Failed to load image into Docker", "error", err)
-				} else {
-					slog.Info("Image successfully loaded into Docker!")
-					os.Remove(result.Path)
-				}
+	// Auto-load received images into Docker.
+	go func() {
+		for result := range downloadedChan {
+			slog.Info("Unpacking and loading image into Docker Daemon...")
+			if err := dockerManager.LoadAndTag(result.Path, result.ImageName); err != nil {
+				slog.Warn("Failed to load image into Docker", "error", err)
+			} else {
+				slog.Info("Image successfully loaded into Docker!")
+				os.Remove(result.Path)
 			}
-		}()
-	}
-
-	if !isDaemon {
-		go func() {
-			metadataPort := actualPort + config.MetadataPortOffset
-			mux := http.NewServeMux()
-			mux.HandleFunc("/architecture", func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte("linux/" + runtime.GOARCH))
-			})
-
-			if err := http.ListenAndServe(fmt.Sprintf(":%d", metadataPort), mux); err != nil && err != http.ErrServerClosed {
-				slog.Error("Metadata server error", "error", err)
-			}
-		}()
-	}
-
-	// Build the context and hand off execution to the CLI
+		}
+	}()
 	cliContext := cli.EngineContext{
 		NodeName:        finalName,
 		TempDir:         tempDir,
-		ActualPort:      actualPort,
+		ActualPort:      p2pPort,
 		PeerRegistry:    peerRegistry,
 		EngineLedger:    engineLedger,
 		TLSConfig:       tlsConfig,
@@ -160,18 +225,83 @@ func main() {
 		DockerManager:   dockerManager,
 	}
 
-	if isDaemon {
-		go api.StartDaemonServer(cliContext, daemonToken)
-	} else {
-		go cli.Start(cliContext)
+	// StartDaemonServer binds its OWN random HTTP listener.
+	apiPortCh := make(chan int, 1)
+	go api.StartDaemonServer(cliContext, daemonToken, stopCh, apiPortCh)
+
+	// Block until the HTTP API is ready.
+	apiPort := <-apiPortCh
+
+	if err := service.WriteState(service.ServiceState{
+		Port:      apiPort,
+		Token:     daemonToken,
+		PID:       os.Getpid(),
+		NodeName:  finalName,
+		StartedAt: time.Now(),
+	}); err != nil {
+		slog.Warn("failed to write service state", "error", err)
 	}
+	slog.Info("background service ready", "apiPort", apiPort, "p2pPort", p2pPort)
 
 	<-ctx.Done()
 	slog.Info("Shutting down Baleen Engine...")
 
-	// Close listener to unblock StartReceiver
-	listener.Close()
+	service.ClearState()
+	service.ReleaseLock()
 
+	listener.Close()
 	wg.Wait()
 	slog.Info("Shutdown complete.")
+}
+
+// Launcher logic for the UI's `baleen daemon` command. This spawns a fully detached background process and returns immediately with the connection info.
+func runLauncher() {
+	daemonFlags := flag.NewFlagSet("daemon", flag.ExitOnError)
+	var daemonToken string
+	daemonFlags.StringVar(&daemonToken, "token", "", "Authorization token for the UI API")
+	var daemonName string
+	daemonFlags.StringVar(&daemonName, "name", "auto", "Name of the Baleen Node")
+	daemonFlags.Parse(os.Args[2:])
+
+	// Check if a background service is already running. If so, return its connection info.
+	if existing, err := service.ReadState(); err == nil && service.IsAlive(existing) {
+		out := map[string]any{
+			"status":    "already_running",
+			"port":      existing.Port,
+			"token":     existing.Token,
+			"node_name": existing.NodeName,
+		}
+		data, _ := json.Marshal(out)
+		fmt.Println(string(data))
+		os.Stdout.Sync()
+		return
+	}
+
+	// Spawn a fully detached background copy of ourselves.
+	if err := service.LaunchBackground(daemonToken, daemonName); err != nil {
+		slog.Error("failed to launch background service", "error", err)
+		os.Exit(1)
+	}
+
+	// Poll until the background daemon writes service.json.
+	state, err := service.WaitForReady(30 * time.Second)
+	if err != nil {
+		slog.Error("background service did not become ready in time", "error", err)
+		os.Exit(1)
+	}
+
+	emitReady(state.Port, state.Token, state.NodeName)
+}
+
+// emitReady prints the JSON line the UI's useDaemon hook parses.
+func emitReady(port int, token string, nodeName string) {
+	out := map[string]any{
+		"status":    "ready",
+		"port":      port,
+		"token":     token,
+		"node_name": nodeName,
+	}
+	data, _ := json.Marshal(out)
+	fmt.Println(string(data))
+	os.Stdout.Sync()
 }
