@@ -42,15 +42,15 @@ graph TD
     style Core fill:none,stroke:#cbd5e1,stroke-width:1px
     style RemoteMachine fill:none,stroke:#86efac,stroke-width:2px,stroke-dasharray: 4 4
 
-    subgraph DockerExt [Docker Extension Environment]
-        direction TB
-        UI[Extension UI React]:::ui
-    end
-
     subgraph HostOS [Host Machine]
         direction TB
         CLI[CLI REPL]:::ui
-        
+
+        subgraph DockerExt [Docker Extension Environment]
+            direction TB
+            UI[Extension UI React]:::ui
+        end
+
         subgraph Core [Baleen Core Engine]
             direction TB
             API[API Daemon]:::core
@@ -61,7 +61,7 @@ graph TD
             Ledger[(State Ledger)]:::db
             Config[Configuration Manager]:::core
         end
-        
+
         Daemon[Local Docker Daemon]:::ext
     end
 
@@ -72,16 +72,16 @@ graph TD
 
     %% Environment Crossing
     UI --->|HTTP / SSE Bridge| API
-    
+
     %% Internal Host connections
     CLI --> CLI_PKG
     API -.->|shares context| CLI_PKG
-    
+
     CLI_PKG --> Doc
     CLI_PKG --> Ledger
     CLI_PKG --> Net
     CLI_PKG --> Trans
-    
+
     Trans --> Config
     Trans --> Ledger
     Doc --->|Unix Socket / Named Pipe| Daemon

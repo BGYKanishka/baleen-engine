@@ -114,18 +114,27 @@ func (pr *PeerRegistry) StartHealthChecker(ctx context.Context, wg *sync.WaitGro
 
 		for name, addr := range checkList {
 			conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+
+			pr.mu.Lock()
+			meta, exists := pr.metadata[name]
+			if !exists {
+				pr.mu.Unlock()
+				continue
+			}
+
 			if err != nil {
-				pr.RemovePeer(name)
-				slog.Info("peer disconnected", "peer", name)
+				meta.Status = "unreachable"
+				if meta.Source != "static" && time.Since(meta.LastSeen) > 60*time.Second {
+					pr.mu.Unlock()
+					pr.RemovePeer(name)
+					slog.Info("peer disconnected", "peer", name)
+					continue
+				}
 			} else {
 				conn.Close()
-				// Update last seen for the API
-				pr.mu.Lock()
-				if meta, exists := pr.metadata[name]; exists {
-					meta.LastSeen = time.Now()
-				}
-				pr.mu.Unlock()
+				meta.Status = "reachable"
 			}
+			pr.mu.Unlock()
 		}
 	}
 }
@@ -193,8 +202,8 @@ func DiscoverPeers(ctx context.Context, wg *sync.WaitGroup, currentNodeName stri
 					var validAddress string
 					for _, ipAddr := range entry.AddrIPv4 {
 						testAddr := net.JoinHostPort(ipAddr.String(), fmt.Sprint(entry.Port))
-						// fast 500ms ping
-						conn, err := net.DialTimeout("tcp", testAddr, 500*time.Millisecond)
+						// fast 1s ping
+						conn, err := net.DialTimeout("tcp", testAddr, 1*time.Second)
 						if err == nil {
 							conn.Close()
 							validAddress = testAddr
@@ -202,8 +211,13 @@ func DiscoverPeers(ctx context.Context, wg *sync.WaitGroup, currentNodeName stri
 						}
 					}
 
+					// If no valid address was found, skip this entry
 					if validAddress == "" {
-						continue
+						if len(entry.AddrIPv4) > 0 {
+							validAddress = net.JoinHostPort(entry.AddrIPv4[0].String(), fmt.Sprint(entry.Port))
+						} else {
+							continue
+						}
 					}
 
 					var fingerprint string

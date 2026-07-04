@@ -62,7 +62,7 @@ func (m *Manager) ExportImage(config PreflightConfig) (string, string, error) {
 
 func (m *Manager) GetImageLayers(imageName string) ([]string, error) {
 	ctx := context.Background()
-	inspectData, _, err := m.Cli.ImageInspectWithRaw(ctx, imageName)
+	inspectData, err := m.Cli.ImageInspect(ctx, imageName)
 	if err != nil {
 		return nil, err
 	}

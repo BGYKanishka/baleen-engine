@@ -12,7 +12,8 @@ import (
 	"github.com/BGYKanishka/baleen-engine/internal/cli"
 )
 
-func StartDaemonServer(ctx cli.EngineContext, token string) {
+// StartDaemonServer starts the HTTP API server for the daemon, listening on a random localhost port.
+func StartDaemonServer(ctx cli.EngineContext, token string, stopCh chan<- struct{}, apiPortCh chan<- int) {
 	lastActive = time.Now()
 	go func() {
 		for approval := range ctx.ApprovalChan {
@@ -33,33 +34,51 @@ func StartDaemonServer(ctx cli.EngineContext, token string) {
 	mux.HandleFunc("/api/pending", withHeartbeat(handlers.Pending(ctx)))
 	mux.HandleFunc("/api/approve", withHeartbeat(handlers.Approve(ctx)))
 	mux.HandleFunc("/api/reject", withHeartbeat(handlers.Reject(ctx)))
+	mux.HandleFunc("/api/gc", withHeartbeat(handlers.GC(ctx)))
+	mux.HandleFunc("/api/logs", withHeartbeat(handlers.Logs()))
+
+	// Stop endpoint: UI/CLI call this when the user clicks the Stop button.
+	mux.HandleFunc("/api/stop", withHeartbeat(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"stopping"}`))
+		// Flush first, then signal main.
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			select {
+			case stopCh <- struct{}{}:
+			default:
+			}
+		}()
+	}))
 
 	handler := corsAndAuthMiddleware(mux, token)
 
+	// Bind to a random localhost port — this is the HTTP API port (not the TLS P2P port).
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		slog.Error("failed to start daemon listener", "error", err)
 		os.Exit(1)
 	}
 
-	actualPort := listener.Addr().(*net.TCPAddr).Port
-	fmt.Printf(`{"status": "ready", "port": %d}`+"\n", actualPort)
-	os.Stdout.Sync()
+	apiPort := listener.Addr().(*net.TCPAddr).Port
 
-	// Monitor idle time and exit if the extension closed or crashed
-	go func() {
-		for {
-			time.Sleep(5 * time.Second)
-			if idleTime() > 2*time.Minute {
-				os.Exit(0)
-			}
-		}
-	}()
+	// Print the API port to stdout in JSON format so that the CLI can read it.
+	select {
+	case apiPortCh <- apiPort:
+	default:
+	}
+
+	fmt.Printf(`{"status": "ready", "port": %d}`+"\n", apiPort)
+	os.Stdout.Sync()
 
 	http.Serve(listener, handler)
 }
 
-// wraps any handler to update the idle timer on each request
+// wraps any handler to update the idle timer on each request.
 func withHeartbeat(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		UpdateHeartbeat()

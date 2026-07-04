@@ -36,7 +36,7 @@ func (m *Manager) RunPreflightHandshake(config PreflightConfig) HandshakeReport 
 	}
 
 	ctx := context.Background()
-	inspectData, _, err := m.Cli.ImageInspectWithRaw(ctx, config.ImageName)
+	inspectData, err := m.Cli.ImageInspect(ctx, config.ImageName)
 
 	if err != nil {
 		// Image doesn't exist locally — will need a cross-build

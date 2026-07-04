@@ -6,26 +6,25 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 )
 
 type MockClient struct {
 	client.APIClient
-	InspectFn func(ctx context.Context, image string) (types.ImageInspect, []byte, error)
+	InspectFn func(ctx context.Context, imageStr string, opts ...client.ImageInspectOption) (image.InspectResponse, error)
 	SaveFn    func(ctx context.Context, imageIDs []string, opts ...client.ImageSaveOption) (io.ReadCloser, error)
-	RemoveFn  func(ctx context.Context, image string, options image.RemoveOptions) ([]image.DeleteResponse, error)
+	RemoveFn  func(ctx context.Context, imageStr string, options image.RemoveOptions) ([]image.DeleteResponse, error)
 	LoadFn    func(ctx context.Context, input io.Reader, quiet bool) (image.LoadResponse, error)
 	TagFn     func(ctx context.Context, source, target string) error
 }
 
 // Implement the methods of the Docker client interface to call the corresponding function fields
-func (m *MockClient) ImageInspectWithRaw(ctx context.Context, image string) (types.ImageInspect, []byte, error) {
+func (m *MockClient) ImageInspect(ctx context.Context, imageStr string, opts ...client.ImageInspectOption) (image.InspectResponse, error) {
 	if m.InspectFn != nil {
-		return m.InspectFn(ctx, image)
+		return m.InspectFn(ctx, imageStr, opts...)
 	}
-	return types.ImageInspect{}, nil, nil
+	return image.InspectResponse{}, nil
 }
 
 func (m *MockClient) ImageSave(ctx context.Context, imageIDs []string, opts ...client.ImageSaveOption) (io.ReadCloser, error) {
@@ -35,9 +34,9 @@ func (m *MockClient) ImageSave(ctx context.Context, imageIDs []string, opts ...c
 	return io.NopCloser(strings.NewReader("dummy tarball content")), nil
 }
 
-func (m *MockClient) ImageRemove(ctx context.Context, image string, options image.RemoveOptions) ([]image.DeleteResponse, error) {
+func (m *MockClient) ImageRemove(ctx context.Context, imageStr string, options image.RemoveOptions) ([]image.DeleteResponse, error) {
 	if m.RemoveFn != nil {
-		return m.RemoveFn(ctx, image, options)
+		return m.RemoveFn(ctx, imageStr, options)
 	}
 	return nil, nil
 }
@@ -57,11 +56,11 @@ func (m *MockClient) ImageTag(ctx context.Context, source, target string) error 
 }
 func TestExportImage(t *testing.T) {
 	mockCli := &MockClient{
-		InspectFn: func(ctx context.Context, image string) (types.ImageInspect, []byte, error) {
-			return types.ImageInspect{
+		InspectFn: func(ctx context.Context, imageStr string, opts ...client.ImageInspectOption) (image.InspectResponse, error) {
+			return image.InspectResponse{
 				Architecture: "amd64",
 				Os:           "linux",
-			}, nil, nil
+			}, nil
 		},
 	}
 	manager := &Manager{Cli: mockCli}
@@ -87,12 +86,12 @@ func TestExportImage(t *testing.T) {
 
 func TestGetImageLayers(t *testing.T) {
 	mockCli := &MockClient{
-		InspectFn: func(ctx context.Context, image string) (types.ImageInspect, []byte, error) {
-			return types.ImageInspect{
-				RootFS: types.RootFS{
+		InspectFn: func(ctx context.Context, imageStr string, opts ...client.ImageInspectOption) (image.InspectResponse, error) {
+			return image.InspectResponse{
+				RootFS: image.RootFS{
 					Layers: []string{"layer1", "layer2"},
 				},
-			}, nil, nil
+			}, nil
 		},
 	}
 	manager := &Manager{Cli: mockCli}

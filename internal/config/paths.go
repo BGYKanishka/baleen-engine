@@ -8,6 +8,15 @@ import (
 // MetadataPortOffset is the offset added to the main port to determine the metadata server port
 const MetadataPortOffset = 1
 
+// returns the path to the running-service state file.
+func ServiceStatePath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(homeDir, ".baleen", "service.json"), nil
+}
+
 // creates the folder and returns paths
 func SetupBaleenDirectory() (string, string, string, string, error) {
 	homeDir, err := os.UserHomeDir()
