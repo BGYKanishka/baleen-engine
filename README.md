@@ -35,6 +35,7 @@ graph TD
     classDef core fill:#f1f5f9,stroke:#cbd5e1,color:#0f172a;
     classDef db fill:#fef3c7,stroke:#fcd34d,color:#451a03;
     classDef ext fill:#dcfce7,stroke:#86efac,color:#14532d;
+    classDef svc fill:#f3e8ff,stroke:#c084fc,color:#3b0764;
 
     %% Environment Boundaries Styling
     style DockerExt fill:none,stroke:#38bdf8,stroke-width:2px,stroke-dasharray: 4 4
@@ -43,18 +44,16 @@ graph TD
     style RemoteMachine fill:none,stroke:#86efac,stroke-width:2px,stroke-dasharray: 4 4
 
     subgraph HostOS [Host Machine]
-        direction TB
         CLI[CLI REPL]:::ui
 
         subgraph DockerExt [Docker Extension Environment]
-            direction TB
             UI[Extension UI React]:::ui
         end
 
-        subgraph Core [Baleen Core Engine]
-            direction TB
+        subgraph Core [Baleen Core Engine / Daemon]
+            Service[Service Manager]:::svc
             API[API Daemon]:::core
-            CLI_PKG[CLI Orchestrator]:::core
+            EngineCtx[Engine Context]:::core
             Net[Network & Discovery]:::core
             Trans[Delta Sync Manager]:::core
             Doc[Docker Integrator]:::core
@@ -66,24 +65,33 @@ graph TD
     end
 
     subgraph RemoteMachine [Remote Environment]
-        direction TB
         Peer[Remote Peer]:::ext
     end
 
-    %% Environment Crossing
+    %% UI & CLI connect to API via HTTP
     UI --->|HTTP / SSE Bridge| API
+    CLI --->|HTTP| API
 
-    %% Internal Host connections
-    CLI --> CLI_PKG
-    API -.->|shares context| CLI_PKG
+    %% CLI reads daemon state (port, token) from Service Manager
+    CLI -->|reads service.json| Service
 
-    CLI_PKG --> Doc
-    CLI_PKG --> Ledger
-    CLI_PKG --> Net
-    CLI_PKG --> Trans
+    %% Startup: Config & Service bootstrap the Engine Context
+    Config -->|paths & node name| EngineCtx
+    Service -->|state & lock| EngineCtx
 
-    Trans --> Config
+    %% EngineContext is injected into the API at startup (not the other way around)
+    EngineCtx -->|injected into| API
+
+    %% EngineContext wires all subsystems together
+    EngineCtx --> Doc
+    EngineCtx --> Ledger
+    EngineCtx --> Net
+    EngineCtx --> Trans
+
+    %% Transfer reads/writes Ledger for hashing and history
     Trans --> Ledger
+
+    %% Docker Integrator talks to local Docker Daemon
     Doc --->|Unix Socket / Named Pipe| Daemon
 
     %% Network Connections
@@ -93,13 +101,14 @@ graph TD
 
 ### Core Components (`internal/`)
 
-- **`cli`**: Interactive REPL loop for pushing images, viewing peers, checking history, and pruning.
+- **`cli`**: Interactive REPL loop for pushing images, viewing peers, checking history, and pruning. Connects to the running daemon via HTTP when a background service is already active.
 - **`api`**: HTTP daemon server providing endpoints for the UI to monitor transfers, peers, images, and live logs (SSE).
 - **`config`**: Core node setup, application paths, and generated node names.
 - **`network`**: Peer discovery via `zeroconf` mDNS and secure connections via ephemeral RSA-2048 self-signed TLS certificates.
 - **`transfer`**: Delta stream engine that negotiates layer diffs, sending only missing layers and verifying integrity via SHA-256.
 - **`ledger`**: `bbolt` powered key-value store for history and local layer caching.
 - **`docker`**: Integration with Docker SDK to inspect, export, buildx (cross-compile), and load images.
+- **`service`**: Daemon lifecycle manager — handles process locking, writing/reading the `service.json` state file (port, token, PID), and spawning the background daemon process.
 
 ### Docker Desktop Extension (`ui/`)
 
