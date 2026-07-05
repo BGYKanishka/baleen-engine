@@ -103,7 +103,7 @@ func StartClientREPL(state service.ServiceState, tempDir string) {
 				continue
 			}
 
-			handleClientCommand(input, client, rl, inputChan, syncChan)
+			handleClientCommand(input, client, rl)
 			syncChan <- struct{}{}
 		}
 	}
@@ -162,7 +162,7 @@ func clientResolveApproval(input string, client *daemonClient, rl *readline.Inst
 }
 
 // Command dispatch
-func handleClientCommand(input string, client *daemonClient, rl *readline.Instance, inputChan chan string, syncChan chan struct{}) {
+func handleClientCommand(input string, client *daemonClient, rl *readline.Instance) {
 	parts := strings.Fields(input)
 	if len(parts) == 0 {
 		return
@@ -188,12 +188,19 @@ func handleClientCommand(input string, client *daemonClient, rl *readline.Instan
 	case "prune":
 		clientRunPrune()
 
+	case "stop":
+		fmt.Print("\nStopping Baleen Engine")
+		clientHandleStop(client)
+		fmt.Println("\nBaleen Engine has been stopped.")
+		rl.Close()
+		os.Exit(0)
+
 	case "exit":
 		fmt.Println("\nDisconnected from Baleen Engine. The background service keeps running.")
 		rl.Close()
 		os.Exit(0)
 	default:
-		fmt.Println("Unknown command. Try 'push <NODE> <IMAGE>', 'peers', 'history', 'gc <all|old|hash>', 'prune', 'exit'")
+		fmt.Println("Unknown command. Try 'push <NODE> <IMAGE>', 'peers', 'history', 'gc <all|old|hash>', 'prune', 'stop', 'exit'")
 	}
 }
 
@@ -421,6 +428,26 @@ func clientRunPrune() {
 	}
 }
 
+func clientHandleStop(client *daemonClient) {
+	resp, err := client.post("/api/stop", nil)
+	if err != nil {
+		fmt.Printf("\nFailed to request stop: %v\n", err)
+		return
+	}
+	resp.Body.Close()
+
+	// Poll /api/health until the daemon is actually gone (up to 10 s).
+	timeout := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeout) {
+		time.Sleep(300 * time.Millisecond)
+		fmt.Print(".")
+		if !client.isHealthy() {
+			return
+		}
+	}
+	// If we reach here, the daemon is still alive after 10 seconds.
+}
+
 func printClientWelcome(state service.ServiceState) {
 	fmt.Printf("\nConnected to Baleen Engine (Node: %s, Port: %d, running in background)\n", state.NodeName, state.Port)
 	fmt.Println("The engine keeps running even after you exit this terminal.")
@@ -430,5 +457,6 @@ func printClientWelcome(state service.ServiceState) {
 	fmt.Println("  history                              - View the transfer ledger")
 	fmt.Println("  gc <all|old|hash> [-rm]              - Run garbage collection")
 	fmt.Println("  prune                                - Clean up old docker images")
+	fmt.Println("  stop                                 - Stop the background service and exit")
 	fmt.Println("  exit                                 - Disconnect CLI (engine keeps running)")
 }

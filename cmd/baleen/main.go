@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -198,7 +199,8 @@ func main() {
 
 	approvalChan := make(chan transfer.ApprovalRequest)
 	downloadedChan := make(chan transfer.DownloadResult)
-	go transfer.StartReceiver(ctx, &wg, listener, incomingDir, approvalChan, downloadedChan, engineLedger)
+	activeTransfers := &atomic.Int32{}
+	go transfer.StartReceiver(ctx, &wg, listener, incomingDir, approvalChan, downloadedChan, engineLedger, activeTransfers)
 
 	// Auto-load received images into Docker.
 	go func() {
@@ -223,6 +225,7 @@ func main() {
 		PendingApproval: &cli.PendingApprovalStore{},
 		DownloadedChan:  downloadedChan,
 		DockerManager:   dockerManager,
+		ActiveTransfers: activeTransfers,
 	}
 
 	// StartDaemonServer binds its OWN random HTTP listener.

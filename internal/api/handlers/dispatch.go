@@ -43,6 +43,9 @@ func Dispatch(ctx cli.EngineContext) http.HandlerFunc {
 
 // handles the export and transfer of a Docker image to a specified peer
 func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) {
+	ctx.ActiveTransfers.Add(1)
+	defer ctx.ActiveTransfers.Add(-1)
+
 	tempID := fmt.Sprintf("pending-%d", time.Now().UnixNano())
 	ctx.EngineLedger.RecordCommit(ledger.Commit{
 		Hash:      tempID,
