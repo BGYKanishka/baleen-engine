@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/BGYKanishka/baleen-engine/internal/docker"
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
@@ -29,6 +30,7 @@ type EngineContext struct {
 	PendingApproval *PendingApprovalStore
 	DownloadedChan  chan transfer.DownloadResult
 	DockerManager   *docker.Manager
+	ActiveTransfers *atomic.Int32
 }
 
 type PendingApprovalStore struct {

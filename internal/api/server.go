@@ -21,6 +21,21 @@ func StartDaemonServer(ctx cli.EngineContext, token string, stopCh chan<- struct
 		}
 	}()
 
+	//auto-shutdown if no client has pinged the API in 5 minutes AND no active transfers.
+	go func() {
+		for {
+			time.Sleep(10 * time.Second)
+			if idleTime() > 5*time.Minute && ctx.ActiveTransfers.Load() == 0 {
+				slog.Info("Daemon is idle and abandoned (no active transfers), shutting down")
+				select {
+				case stopCh <- struct{}{}:
+				default:
+				}
+				return
+			}
+		}
+	}()
+
 	mux := http.NewServeMux()
 
 	// Wire up all route handlers, injecting shared dependencies

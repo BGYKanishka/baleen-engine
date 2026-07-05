@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/BGYKanishka/baleen-engine/internal/config"
@@ -24,7 +25,7 @@ type DownloadResult struct {
 }
 
 // runs a background TCP server to listen for incoming files
-func StartReceiver(ctx context.Context, wg *sync.WaitGroup, listener net.Listener, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan DownloadResult, engineLedger *ledger.Ledger) {
+func StartReceiver(ctx context.Context, wg *sync.WaitGroup, listener net.Listener, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan DownloadResult, engineLedger *ledger.Ledger, activeTransfers *atomic.Int32) {
 	defer wg.Done()
 
 	for {
@@ -38,12 +39,14 @@ func StartReceiver(ctx context.Context, wg *sync.WaitGroup, listener net.Listene
 				continue
 			}
 		}
-		go handleIncomingTransfer(conn, incomingDir, approvalChan, downloadedChan, engineLedger)
+		go handleIncomingTransfer(conn, incomingDir, approvalChan, downloadedChan, engineLedger, activeTransfers)
 	}
 }
 
 // reads a full Docker tarball and streams
-func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan DownloadResult, engineLedger *ledger.Ledger) {
+func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan DownloadResult, engineLedger *ledger.Ledger, activeTransfers *atomic.Int32) {
+	activeTransfers.Add(1)
+	defer activeTransfers.Add(-1)
 	defer conn.Close()
 
 	// Use a single decoder for the entire connection lifetime to avoid

@@ -205,8 +205,6 @@ export function useDaemon(ddClient: any) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  
-  // Heartbeat: ping /api/health every 5s while running. If 3 consecutive failures, mark as error.
   const heartbeatFailsRef = useRef(0);
   useEffect(() => {
     if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
@@ -229,17 +227,49 @@ export function useDaemon(ddClient: any) {
         if (heartbeatFailsRef.current >= 3) {
           clearInterval(heartbeatIntervalRef.current!);
           setPort(null);
-          portRef.current = null;
-          setStatus('error');
-          setErrorMsg('Lost connection to the background service. Click Restart to reconnect.');
+          portRef.current  = null;
+          tokenRef.current = '';
+
+          // Ask the binary whether the daemon is truly gone or just crashed.
+          ddClient.extension.host.cli.exec('baleen', ['status'], {
+            stream: {
+              onOutput(data: { stdout?: string }) {
+                const line = (data.stdout || '').trim();
+                try {
+                  const jsonMatch = line.match(/\{[^}]*\}/);
+                  if (jsonMatch) {
+                    const parsed = JSON.parse(jsonMatch[0]);
+                    if (parsed.status === 'stopped') {
+                      addLog('[SYSTEM] Service was stopped externally.');
+                      setStatus('stopped');
+                      return;
+                    }
+                  }
+                } catch { /* ignore */ }
+              },
+              onError() {
+                setStatus('error');
+                setErrorMsg('Lost connection to the background service. Click Restart to reconnect.');
+              },
+              onClose() {
+                setStatus((current) => {
+                  if (current === 'running') {
+                    setErrorMsg('Lost connection to the background service. Click Restart to reconnect.');
+                    return 'error';
+                  }
+                  return current;
+                });
+              },
+            },
+          });
         }
       }
-    }, 5000);
+    }, 2000);
 
     return () => {
       if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
     };
-  }, [status, port, token, addLog]);
+  }, [status, port, token, addLog, ddClient]);
 
 
   // Log Polling: fetch /api/logs every 2s while running.
