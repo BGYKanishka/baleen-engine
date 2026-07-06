@@ -18,15 +18,15 @@ export default function LedgerTab({ port, token }: { port: number, token: string
   }, [port, token]);
 
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto">
       <table className="w-full text-left">
         <thead className="bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm">
           <tr>
-            <th className="px-4 py-3">Time</th>
-            <th className="px-4 py-3">Direction</th>
-            <th className="px-4 py-3">Image</th>
-            <th className="px-4 py-3">Peer</th>
-            <th className="px-4 py-3">Status</th>
+            <th className="px-4 py-3 whitespace-nowrap">Time</th>
+            <th className="px-4 py-3 whitespace-nowrap">Direction</th>
+            <th className="px-4 py-3 whitespace-nowrap">Image</th>
+            <th className="px-4 py-3 whitespace-nowrap">Peer</th>
+            <th className="px-4 py-3 min-w-[300px]">Status</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -35,11 +35,11 @@ export default function LedgerTab({ port, token }: { port: number, token: string
           )}
           {history.map((record, i) => (
             <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700 text-sm">
-              <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{new Date(record.timestamp).toLocaleString()}</td>
-              <td className="px-4 py-3 capitalize">{record.direction}</td>
-              <td className="px-4 py-3 font-medium font-mono text-gray-900 dark:text-gray-200">{record.image}</td>
-              <td className="px-4 py-3 font-mono text-gray-800 dark:text-gray-300">{record.peer || 'Unknown'}</td>
-              <td className="px-4 py-3">
+              <td className="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">{new Date(record.timestamp).toLocaleString()}</td>
+              <td className="px-4 py-3 capitalize whitespace-nowrap">{record.direction}</td>
+              <td className="px-4 py-3 font-medium font-mono text-gray-900 dark:text-gray-200 whitespace-nowrap">{record.image}</td>
+              <td className="px-4 py-3 font-mono text-gray-800 dark:text-gray-300 whitespace-nowrap">{record.peer || 'Unknown'}</td>
+              <td className="px-4 py-3 min-w-[300px]">
                 <span className={
                   record.status === 'Completed' ? 'text-green-600 dark:text-green-400' : 
                   record.status === 'Pending' ? 'text-yellow-600 dark:text-yellow-400' : 

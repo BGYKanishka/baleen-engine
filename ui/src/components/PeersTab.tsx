@@ -37,18 +37,6 @@ export default function PeersTab({ port, token }: { port: number, token: string 
     }
   };
 
-  const removePeer = async (hostname: string) => {
-    try {
-      await fetch(`http://127.0.0.1:${port}/api/peers/${hostname}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      fetchPeers();
-    } catch (e) {
-      console.error("Failed to remove peer");
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex gap-4 items-end">
@@ -75,7 +63,6 @@ export default function PeersTab({ port, token }: { port: number, token: string 
               <th className="px-4 py-3">IP Address</th>
               <th className="px-4 py-3">Source</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -92,13 +79,10 @@ export default function PeersTab({ port, token }: { port: number, token: string 
                   <span className={`w-2 h-2 rounded-full ${peer.status === 'reachable' ? 'bg-green-500' : 'bg-red-500'}`}></span>
                   {peer.status}
                 </td>
-                <td className="px-4 py-3">
-                  <button onClick={() => removePeer(peer.hostname)} className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm">Remove</button>
-                </td>
               </tr>
             ))}
             {peers.length === 0 && (
-              <tr><td colSpan={5} className="text-center py-8 text-gray-500">No peers discovered yet.</td></tr>
+              <tr><td colSpan={4} className="text-center py-8 text-gray-500">No peers discovered yet.</td></tr>
             )}
           </tbody>
         </table>
