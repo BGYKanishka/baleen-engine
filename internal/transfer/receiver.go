@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -23,6 +24,8 @@ type DownloadResult struct {
 	Path      string
 	ImageName string
 }
+
+var isHex = regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString
 
 // runs a background TCP server to listen for incoming files
 func StartReceiver(ctx context.Context, wg *sync.WaitGroup, listener net.Listener, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan DownloadResult, engineLedger *ledger.Ledger, activeTransfers *atomic.Int32) {
@@ -149,6 +152,9 @@ func downloadPayload(decoder *json.Decoder, conn net.Conn, incomingDir string, i
 		return "", fmt.Errorf("failed to read stream header: %w", err)
 	}
 
+	if !isHex(streamHeader.PrunedHash) {
+		return "", fmt.Errorf("invalid hash format from peer")
+	}
 	safeFilename := "incoming_pruned_" + streamHeader.PrunedHash[:8] + ".tar"
 	targetPath := filepath.Join(incomingDir, safeFilename)
 
@@ -196,6 +202,9 @@ func downloadPayload(decoder *json.Decoder, conn net.Conn, incomingDir string, i
 
 // stitches the full tarball back together by copying in the missing layers
 func reconstructTarball(targetPath string, incomingDir string, req TransferRequest, layerCacheDir string, alreadyOwnedLayers []string) (string, error) {
+	if !isHex(req.Hash) {
+		return "", fmt.Errorf("invalid hash format from peer")
+	}
 	reconstructedPath := filepath.Join(incomingDir, "ready_"+req.Hash[:8]+".tar")
 
 	slog.Info("stitching cached layers back into payload")

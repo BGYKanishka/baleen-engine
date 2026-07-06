@@ -40,6 +40,10 @@ func LaunchBackground(token string, name string) error {
 		return fmt.Errorf("resolve log path: %w", err)
 	}
 
+	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
+		return fmt.Errorf("create baleen directory: %w", err)
+	}
+
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return fmt.Errorf("open daemon log: %w", err)

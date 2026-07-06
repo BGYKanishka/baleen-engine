@@ -1,10 +1,7 @@
 # Baleen Engine 🐳
 
-![Status](https://img.shields.io/badge/Status-Ongoing_Development-orange)
-
 Baleen Engine is a high-speed, local-first, peer-to-peer Docker image sharing engine. It completely bypasses cloud registries and internet bottlenecks, allowing you to synchronize Docker images directly between machines on your local network.
 
-> **🚧 Project Status:** This project is currently in **active development (ongoing)**. The core engine is functional, but features, architecture, and APIs are subject to change as development continues. 
 
 ## 🚀 Key Features
 
@@ -15,6 +12,14 @@ Baleen Engine is a high-speed, local-first, peer-to-peer Docker image sharing en
 *   **Smart Architecture Detection:** Automatically handles multi-architecture image resolution across different platforms via `docker buildx`.
 *   **Dual-Mode Interface:** Run as a lightweight background daemon with an interactive hybrid CLI, or use the fully integrated Docker Desktop Extension with a visual React-based UI.
 *   **Cross-Platform Support:** Written in Go with native Docker SDK integration, supporting deployment on Windows, macOS, and Linux.
+
+## 🔒 Security & Trust Model
+
+Baleen Engine is designed for local-first peer-to-peer sharing. 
+- **Encryption:** All P2P transfers are encrypted using ephemeral RSA-2048 self-signed TLS certificates.
+- **Trust On First Use (TOFU):** Because there is no central certificate authority, the incoming TLS connections are unauthenticated at the network layer. 
+- **Manual Approval Required:** To prevent unauthorized images from being pushed to your machine, **all incoming transfers require explicit user approval** via the CLI or UI before any data is processed or loaded into Docker. *(Note: Baleen trusts the local network — treat it the way you'd treat an open SMB share. Anyone on your Wi-Fi can prompt an approval request).*
+- **API Security:** The local management API intentionally binds exclusively to `127.0.0.1`, ensuring that other machines on your LAN cannot issue administrative commands to your daemon.
 
 ## 🛠️ Tech Stack
 

@@ -16,10 +16,42 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
         // Use the native Docker API instead of CLI commands
         const localImages = await ddClient.docker.listImages();
 
+        let hostArch = 'arm64';
+        try {
+          const infoRes = await ddClient.docker.cli.exec('info', ['--format', '{{.Architecture}}']);
+          hostArch = infoRes.stdout.trim();
+          if (hostArch === 'aarch64') hostArch = 'arm64';
+          if (hostArch === 'x86_64') hostArch = 'amd64';
+        } catch (e) {
+          console.error("Failed to get host arch", e);
+        }
+
+        const uniqueIds = Array.from(new Set(localImages.map((img: any) => img.Id)));
+        let archMap: Record<string, string> = {};
+
+        if (uniqueIds.length > 0) {
+           const chunkSize = 50;
+           for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+             const chunk = uniqueIds.slice(i, i + chunkSize);
+             try {
+                const inspectRes = await ddClient.docker.cli.exec('inspect', chunk as string[]);
+                const inspectData = JSON.parse(inspectRes.stdout);
+                inspectData.forEach((data: any) => {
+                   archMap[data.Id] = data.Architecture;
+                });
+             } catch (e) {
+                console.error("Failed to inspect chunk of images", e);
+             }
+           }
+        }
+
         const formattedImages: DockerImage[] = [];
 
         localImages.forEach((img: any) => {
           if (!img.RepoTags || img.RepoTags.length === 0) return;
+
+          const arch = archMap[img.Id] || 'unknown';
+          const isMismatch = arch !== 'unknown' && arch !== hostArch;
 
           img.RepoTags.forEach((repoTag: string) => {
             if (repoTag === '<none>:<none>' || repoTag.startsWith('<none>')) return;
@@ -30,6 +62,8 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
               name: name || '<unknown>',
               tag: tag || 'latest',
               size: (img.Size / (1024 * 1024)).toFixed(2) + ' MB',
+              arch,
+              isMismatch,
             });
           });
         });
@@ -119,7 +153,16 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {images.map((img, i) => (
               <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{img.name}</td>
+                <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">
+                  <div className="flex items-center gap-2">
+                    {img.name}
+                    {img.isMismatch && (
+                      <span title={`Architecture mismatch: Image is ${img.arch}`} className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800 uppercase tracking-wider">
+                        {img.arch}
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{img.tag}</td>
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{img.size}</td>
                 <td className="px-4 py-3 text-right">
