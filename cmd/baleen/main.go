@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -94,7 +96,12 @@ func main() {
 			fmt.Printf("No background service found — spawning Baleen daemon...\n")
 			// Launch the background daemon!
 			// The UI's status probe will pick up this auto-generated token later if needed.
-			token := "cli-" + config.GenerateNodeName()
+			randomBytes := make([]byte, 16)
+			if _, err := rand.Read(randomBytes); err != nil {
+				slog.Error("failed to generate token", "error", err)
+				os.Exit(1)
+			}
+			token := hex.EncodeToString(randomBytes)
 			if err := service.LaunchBackground(token, finalName); err != nil {
 				slog.Error("failed to launch background service", "error", err)
 				os.Exit(1)
