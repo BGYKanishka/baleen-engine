@@ -120,6 +120,7 @@ func negotiate(encoder *json.Encoder, decoder *json.Decoder, imageName string, h
 	}
 
 	if !response.Approved {
+		slog.Info("transfer rejected by remote node", "image", imageName)
 		return nil, fmt.Errorf("transfer rejected by remote node")
 	}
 

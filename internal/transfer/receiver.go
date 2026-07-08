@@ -126,7 +126,7 @@ func receiveAndApprove(decoder *json.Decoder, encoder *json.Encoder, approvalCha
 	// Block until approve/reject is called
 	if approved := <-respChan; !approved {
 		encoder.Encode(TransferResponse{Approved: false})
-		slog.Info("transfer rejected")
+		slog.Info("transfer rejected", "image", req.ImageName, "author", req.Author)
 		return req, false
 	}
 	return req, true

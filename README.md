@@ -1,7 +1,10 @@
 # Baleen Engine 🐳
 
+![Status](https://img.shields.io/badge/Status-Ongoing_Development-orange)
+
 Baleen Engine is a high-speed, local-first, peer-to-peer Docker image sharing engine. It completely bypasses cloud registries and internet bottlenecks, allowing you to synchronize Docker images directly between machines on your local network.
 
+> **🚧 Project Status:** This project is currently in **active development (ongoing)**. The core engine is functional, but features, architecture, and APIs are subject to change as development continues. 
 
 ## 🚀 Key Features
 
