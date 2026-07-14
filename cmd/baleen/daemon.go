@@ -128,7 +128,7 @@ func runDaemon(args []string) {
 	network.LoadStaticPeers(peerRegistry)
 	go network.DiscoverPeers(ctx, &wg, finalName, peerRegistry)
 	go peerRegistry.StartHealthChecker(ctx, &wg)
-
+	go network.StartMetadataServer(p2pPort + config.MetadataPortOffset)
 	approvalChan := make(chan transfer.ApprovalRequest)
 	downloadedChan := make(chan transfer.DownloadResult)
 	activeTransfers := &atomic.Int32{}

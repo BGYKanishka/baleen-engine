@@ -65,7 +65,7 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 				Author:    ctx.NodeName,
 				Timestamp: time.Now().Format(time.RFC3339),
 				Direction: "Exported",
-				Status:    fmt.Sprintf("Failed (Panic): %v", r),
+				Status:    "Crashed",
 			})
 		}
 	}()
@@ -78,7 +78,7 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 			Author:    ctx.NodeName,
 			Timestamp: time.Now().Format(time.RFC3339),
 			Direction: "Exported",
-			Status:    fmt.Sprintf("Failed: %v", resolveErr),
+			Status:    "Failed",
 		})
 		return
 	}
@@ -101,7 +101,7 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 			Author:    ctx.NodeName,
 			Timestamp: time.Now().Format(time.RFC3339),
 			Direction: "Exported",
-			Status:    fmt.Sprintf("Failed: %v", err),
+			Status:    "Failed",
 		})
 		return
 	}
@@ -123,17 +123,12 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 
 	pushErr := transfer.PushImage(targetIP, port, fingerprint, exportedFilePath, image, hash, ctx.NodeName, arch, ctx.TLSConfig)
 
-	status := "Completed"
-	if pushErr != nil {
-		status = fmt.Sprintf("Failed: %v", pushErr)
-	}
-
 	ctx.EngineLedger.RecordCommit(ledger.Commit{
 		Hash:      hash,
 		Image:     image,
 		Author:    ctx.NodeName,
 		Timestamp: time.Now().Format(time.RFC3339),
 		Direction: "Exported",
-		Status:    status,
+		Status:    transfer.ParseErrorToStatus(pushErr),
 	})
 }

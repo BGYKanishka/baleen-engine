@@ -30,8 +30,18 @@ func PushImage(targetIP string, port int, fingerprint string, filePath string, i
 	encoder := json.NewEncoder(conn)
 	decoder := json.NewDecoder(conn)
 
-	// Tell the UI we're waiting for receiver confirmation
+	// Publish pre-streaming status.
 	PublishStatus(imageName, targetIP, "push", "waiting for approval")
+
+	// Register a cancellable pending connection for the approval phase.
+	pending := &PendingTransfer{
+		CancelConn: func() { conn.Close() },
+		SendControl: func(action, initiator string) {
+			SendControlMessage(targetIP, port, fingerprint, imageName, author, action, initiator, tlsConfig)
+		},
+	}
+	GlobalManager.RegisterPendingConn(imageName, targetIP, pending)
+	defer GlobalManager.UnregisterPendingConn(imageName, targetIP)
 
 	missingLayers, err := negotiate(encoder, decoder, imageName, hash, author, imageArch, fileSize, layers)
 	if err != nil {
@@ -47,7 +57,7 @@ func PushImage(targetIP string, port int, fingerprint string, filePath string, i
 	}
 	defer os.Remove(prunedPath)
 
-	return streamPayload(encoder, conn, prunedPath, prunedHash, targetIP, imageName)
+	return streamPayload(encoder, conn, prunedPath, prunedHash, targetIP, imageName, author, port, fingerprint, tlsConfig)
 }
 
 // opens the tarball, reads its size and layer digests
@@ -94,6 +104,29 @@ func dialReceiver(targetIP string, port int, expectedFingerprint string, tlsConf
 		return nil, fmt.Errorf("failed to connect to %s: %w", address, err)
 	}
 	return conn, nil
+}
+
+// opens a new TLS connection to the receiver and sends a control action.
+// author is included so the receiver can find the pull progressWriter .
+func SendControlMessage(targetIP string, port int, fingerprint string, imageName string, author string, action string, initiator string, tlsConfig *tls.Config) error {
+	conn, err := dialReceiver(targetIP, port, fingerprint, tlsConfig)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	encoder := json.NewEncoder(conn)
+	req := TransferRequest{
+		ImageName: imageName,
+		Author:    author,
+		IsControl: true,
+		Action:    action,
+		Initiator: initiator,
+	}
+	if err := encoder.Encode(req); err != nil {
+		return fmt.Errorf("failed to send control message: %w", err)
+	}
+	return nil
 }
 
 // sends the transfer request and returns the list of layers the receiver is missing
@@ -145,8 +178,9 @@ func pruneAndHash(filePath string, layers []string, missingLayers []string) (str
 	return prunedPath, prunedHash, nil
 }
 
-// sends the stream header then copies the pruned file over the connection
-func streamPayload(encoder *json.Encoder, conn *tls.Conn, prunedPath string, prunedHash string, targetIP string, image string) error {
+// sends the stream header then copies the pruned file.
+func streamPayload(encoder *json.Encoder, conn *tls.Conn, prunedPath string, prunedHash string,
+	targetIP string, image string, author string, peerPort int, peerFingerprint string, tlsConfig *tls.Config) error {
 	info, err := os.Stat(prunedPath)
 	if err != nil {
 		return fmt.Errorf("failed to stat pruned file: %w", err)
@@ -169,20 +203,51 @@ func streamPayload(encoder *json.Encoder, conn *tls.Conn, prunedPath string, pru
 	defer prunedFile.Close()
 
 	pw := newProgressWriter(conn, info.Size(), image, targetIP, "push")
+	// notify the receiver of control actions via a fresh connection
+	pw.notifyPeer = func(action, initiator string) {
+		SendControlMessage(targetIP, peerPort, peerFingerprint, image, author, action, initiator, tlsConfig)
+	}
+	defer pw.Cleanup()
+
+	// Listen for reverse-pipe control signals sent by the receiver over the data connection.
+	go func() {
+		buf := make([]byte, 1)
+		for {
+			n, err := conn.Read(buf)
+			if err != nil || n == 0 {
+				return
+			}
+			switch buf[0] {
+			case 'P':
+				pw.Pause("receiver")
+			case 'R':
+				if err := pw.Resume("receiver"); err != nil {
+					slog.Warn("receiver-side resume rejected", "reason", err)
+				}
+			case 'C':
+				pw.Cancel()
+			}
+		}
+	}()
+
 	bytesSent, err := io.Copy(pw, prunedFile)
-	if err != nil {
+	if err != nil && !pw.canceled.Load() {
 		GlobalHub.Publish(ProgressEvent{
 			Direction: "push",
 			Image:     image,
 			Peer:      targetIP,
-			Progress:  float64(pw.sent.Load()) / float64(info.Size()) * 100,
+			Progress:  pw.currentProgress(),
 			Speed:     "",
 			Status:    "failed",
 		})
 		return fmt.Errorf("file stream failed: %w", err)
 	}
 
-	// Publish final 100% completed event
+	if pw.canceled.Load() {
+		return fmt.Errorf("transfer canceled")
+	}
+
+	// publish completed
 	GlobalHub.Publish(ProgressEvent{
 		Direction: "push",
 		Image:     image,

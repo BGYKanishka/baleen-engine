@@ -96,9 +96,7 @@ func recordAndPush(ctx EngineContext, exportedPath, image, arch, targetIP string
 	hash, _ := ledger.GenerateHash(exportedPath)
 	pushErr := transfer.PushImage(targetIP, targetPort, fingerprint, exportedPath, image, hash, ctx.NodeName, arch, ctx.TLSConfig)
 
-	status := "Completed"
 	if pushErr != nil {
-		status = "Failed"
 		slog.Error("push failed", "error", pushErr)
 	}
 	commit := ledger.Commit{
@@ -107,7 +105,7 @@ func recordAndPush(ctx EngineContext, exportedPath, image, arch, targetIP string
 		Author:    ctx.NodeName,
 		Timestamp: time.Now().Format(time.RFC3339),
 		Direction: "Exported",
-		Status:    status,
+		Status:    transfer.ParseErrorToStatus(pushErr),
 	}
 	if err := ctx.EngineLedger.RecordCommit(commit); err != nil {
 		slog.Error("failed to write transfer to ledger", "error", err)

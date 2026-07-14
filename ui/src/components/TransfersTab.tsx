@@ -3,6 +3,10 @@ import { TransferStream } from '../types';
 
 export default function TransfersTab({ port, token }: { port: number; token: string }) {
   const [transfers, setTransfers] = useState<TransferStream[]>([]);
+  // Transfer waiting for cancel confirmation (image-peer).
+  const [confirmCancelKey, setConfirmCancelKey] = useState<string | null>(null);
+  // Message shown on backend rejection (e.g., wrong side resumes).
+  const [controlMsg, setControlMsg] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -21,7 +25,7 @@ export default function TransfersTab({ port, token }: { port: number; token: str
       }
     };
 
-    poll(); // immediate first fetch
+    poll();
     const interval = setInterval(poll, 500);
 
     return () => {
@@ -30,30 +34,79 @@ export default function TransfersTab({ port, token }: { port: number; token: str
     };
   }, [port, token]);
 
+  /** Send control action. Shows toast on 409 ownership violation. */
+  const handleControl = async (t: TransferStream, action: 'pause' | 'resume' | 'cancel') => {
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/transfer/${action}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ image: t.image, peer: t.peer }),
+      });
+
+      if (res.status === 409) {
+        // Other side owns the pause. Show server message.
+        const text = await res.text();
+        showControlMsg(text.trim() || 'Action not allowed right now.');
+      } else if (res.ok && action === 'cancel') {
+        // Remove immediately, don't wait for hub poll.
+        setTransfers(prev => prev.filter(tr => tr.image !== t.image || tr.peer !== t.peer));
+      }
+    } catch (e) {
+      console.error('failed to send control action', e);
+    }
+  };
+
+  const showControlMsg = (msg: string) => {
+    setControlMsg(msg);
+    setTimeout(() => setControlMsg(null), 4000);
+  };
+
+  const transferKey = (t: TransferStream) => `${t.image}-${t.peer}`;
+
   function statusColor(status: string) {
     switch (status) {
-      case 'completed':            return 'text-green-600 dark:text-green-400';
-      case 'failed':               return 'text-red-600 dark:text-red-400';
-      case 'rejected':             return 'text-red-600 dark:text-red-400';
+      case 'completed': return 'text-green-600 dark:text-green-400';
+      case 'failed': return 'text-red-600 dark:text-red-400';
+      case 'rejected': return 'text-red-600 dark:text-red-400';
+      case 'cancelled': return 'text-orange-600 dark:text-orange-400';
+      case 'paused': return 'text-blue-600 dark:text-blue-400';
       case 'waiting for approval': return 'text-yellow-600 dark:text-yellow-400';
-      case 'pruning':              return 'text-yellow-600 dark:text-yellow-400';
-      default:                     return 'text-gray-600 dark:text-gray-400';
+      case 'pruning': return 'text-yellow-600 dark:text-yellow-400';
+      default: return 'text-gray-600 dark:text-gray-400';
     }
   }
 
   function barColor(status: string) {
     switch (status) {
-      case 'completed':            return 'bg-green-500';
-      case 'failed':               return 'bg-red-500';
-      case 'rejected':             return 'bg-red-500';
+      case 'completed': return 'bg-green-500';
+      case 'failed': return 'bg-red-500';
+      case 'rejected': return 'bg-red-500';
+      case 'cancelled': return 'bg-orange-500';
+      case 'paused': return 'bg-blue-400';
       case 'waiting for approval':
-      case 'pruning':              return 'bg-yellow-500';
-      default:                     return 'bg-blue-600';
+      case 'pruning': return 'bg-yellow-500';
+      default: return 'bg-blue-600';
     }
   }
 
+  const activeStatuses = ['transferring', 'paused', 'pruning', 'waiting for approval'];
+
   return (
     <div className="space-y-4">
+      {/* Toast: ownership violation message  */}
+      {controlMsg && (
+        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 bg-orange-50 dark:bg-orange-900/40 border border-orange-200 dark:border-orange-700 text-orange-800 dark:text-orange-300 px-4 py-3 rounded-lg shadow-lg text-sm max-w-xs animate-fade-in">
+          <svg className="w-4 h-4 shrink-0 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+              d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          <span>{controlMsg}</span>
+        </div>
+      )}
+
       {transfers.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-10 rounded-lg flex flex-col items-center justify-center text-center">
           <svg className="w-12 h-12 text-gray-300 dark:text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -65,7 +118,7 @@ export default function TransfersTab({ port, token }: { port: number; token: str
       ) : (
         transfers.map((t) => (
           <div
-            key={`${t.image}-${t.peer}`}
+            key={transferKey(t)}
             className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 rounded-lg flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow"
           >
             <div className="flex justify-between items-start">
@@ -75,7 +128,7 @@ export default function TransfersTab({ port, token }: { port: number; token: str
                 </span>
                 <span className="font-mono text-sm text-gray-900 dark:text-gray-100 font-medium">{t.image}</span>
               </div>
-              {t.speed && t.speed !== "0 B/s" && (
+              {t.speed && t.speed !== '0 B/s' && (
                 <span className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-50 dark:bg-gray-900/50 px-2 py-1 rounded border border-gray-100 dark:border-gray-700">
                   {t.speed}
                 </span>
@@ -103,6 +156,67 @@ export default function TransfersTab({ port, token }: { port: number; token: str
                 </span>
               </div>
             </div>
+
+            {/* ── Action buttons for active transfers ──────────────────────── */}
+            {activeStatuses.includes(t.status) && (
+              <div className="flex items-center gap-2 mt-1 pt-3 border-t border-gray-100 dark:border-gray-700">
+
+                {/* Pause / Resume */}
+                {t.status !== 'waiting for approval' && t.status !== 'pruning' && (
+                  t.status === 'paused' ? (
+                    <button
+                      id={`resume-${transferKey(t)}`}
+                      onClick={() => handleControl(t, 'resume')}
+                      className="px-3 py-1 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs font-semibold rounded hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
+                    >
+                      Resume
+                    </button>
+                  ) : (
+                    <button
+                      id={`pause-${transferKey(t)}`}
+                      onClick={() => handleControl(t, 'pause')}
+                      className="px-3 py-1 bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 text-xs font-semibold rounded hover:bg-yellow-100 dark:hover:bg-yellow-900/50 transition-colors"
+                    >
+                      Pause
+                    </button>
+                  )
+                )}
+
+                {/* Cancel — with inline confirmation */}
+                <div className="ml-auto flex items-center gap-2">
+                  {confirmCancelKey === transferKey(t) ? (
+                    <>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Confirm cancel?</span>
+                      <button
+                        id={`cancel-confirm-${transferKey(t)}`}
+                        onClick={async () => {
+                          setConfirmCancelKey(null);
+                          await handleControl(t, 'cancel');
+                        }}
+                        className="px-3 py-1 bg-red-600 text-white text-xs font-semibold rounded hover:bg-red-700 transition-colors"
+                      >
+                        Yes, cancel
+                      </button>
+                      <button
+                        id={`cancel-dismiss-${transferKey(t)}`}
+                        onClick={() => setConfirmCancelKey(null)}
+                        className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        No
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      id={`cancel-${transferKey(t)}`}
+                      onClick={() => setConfirmCancelKey(transferKey(t))}
+                      className="px-3 py-1 bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs font-semibold rounded hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         ))
       )}

@@ -3,7 +3,9 @@ package network
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"runtime"
 	"strings"
 	"time"
 
@@ -27,6 +29,20 @@ func DetectRemoteArch(ip string, port int) string {
 	}
 
 	return strings.TrimSpace(string(bodyBytes))
+}
+
+// StartMetadataServer runs a lightweight HTTP server to expose the node's architecture.
+func StartMetadataServer(port int) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/architecture", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("linux/" + runtime.GOARCH))
+	})
+	
+	addr := fmt.Sprintf(":%d", port)
+	slog.Info("starting metadata server", "port", port)
+	if err := http.ListenAndServe(addr, mux); err != nil {
+		slog.Error("metadata server failed", "error", err)
+	}
 }
 
 // ResolveTargetAddress resolves a peer name or address to an IP and port, using the peer registry if available.
