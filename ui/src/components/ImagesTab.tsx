@@ -16,6 +16,28 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
         // Use the native Docker API instead of CLI commands
         const localImages = await ddClient.docker.listImages();
 
+        // 1. Initial Render (Instant)
+        const initialImages: DockerImage[] = [];
+        localImages.forEach((img: any) => {
+          if (!img.RepoTags || img.RepoTags.length === 0) return;
+          img.RepoTags.forEach((repoTag: string) => {
+            if (repoTag === '<none>:<none>' || repoTag.startsWith('<none>')) return;
+            const lastColonIndex = repoTag.lastIndexOf(':');
+            const name = lastColonIndex !== -1 ? repoTag.substring(0, lastColonIndex) : repoTag;
+            const tag = lastColonIndex !== -1 ? repoTag.substring(lastColonIndex + 1) : 'latest';
+            initialImages.push({
+              name: name || '<unknown>',
+              tag: tag || 'latest',
+              size: (img.Size / (1024 * 1024)).toFixed(2) + ' MB',
+              arch: '...', // visually indicate it's loading
+              isMismatch: false,
+              id: img.Id,
+            });
+          });
+        });
+        setImages(initialImages);
+
+        // 2. Background Fetch for Architecture metadata
         let hostArch = 'arm64';
         try {
           const infoRes = await ddClient.docker.cli.exec('info', ['--format', '{{.Architecture}}']);
@@ -31,44 +53,32 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
 
         if (uniqueIds.length > 0) {
            const chunkSize = 50;
+           const chunkPromises = [];
+
            for (let i = 0; i < uniqueIds.length; i += chunkSize) {
              const chunk = uniqueIds.slice(i, i + chunkSize);
-             try {
-                const inspectRes = await ddClient.docker.cli.exec('inspect', chunk as string[]);
-                const inspectData = JSON.parse(inspectRes.stdout);
-                inspectData.forEach((data: any) => {
-                   archMap[data.Id] = data.Architecture;
-                });
-             } catch (e) {
-                console.error("Failed to inspect chunk of images", e);
-             }
+             chunkPromises.push((async () => {
+               try {
+                  const inspectRes = await ddClient.docker.cli.exec('inspect', chunk as string[]);
+                  const inspectData = JSON.parse(inspectRes.stdout);
+                  inspectData.forEach((data: any) => {
+                     archMap[data.Id] = data.Architecture;
+                  });
+               } catch (e) {
+                  console.error("Failed to inspect chunk of images", e);
+               }
+             })());
            }
+           
+           await Promise.all(chunkPromises);
+
+           // 3. Update State with Architectures
+           setImages(prevImages => prevImages.map(img => {
+             const arch = img.id && archMap[img.id] ? archMap[img.id] : 'unknown';
+             const isMismatch = arch !== 'unknown' && arch !== hostArch && arch !== '...';
+             return { ...img, arch, isMismatch };
+           }));
         }
-
-        const formattedImages: DockerImage[] = [];
-
-        localImages.forEach((img: any) => {
-          if (!img.RepoTags || img.RepoTags.length === 0) return;
-
-          const arch = archMap[img.Id] || 'unknown';
-          const isMismatch = arch !== 'unknown' && arch !== hostArch;
-
-          img.RepoTags.forEach((repoTag: string) => {
-            if (repoTag === '<none>:<none>' || repoTag.startsWith('<none>')) return;
-            const lastColonIndex = repoTag.lastIndexOf(':');
-            const name = lastColonIndex !== -1 ? repoTag.substring(0, lastColonIndex) : repoTag;
-            const tag = lastColonIndex !== -1 ? repoTag.substring(lastColonIndex + 1) : 'latest';
-            formattedImages.push({
-              name: name || '<unknown>',
-              tag: tag || 'latest',
-              size: (img.Size / (1024 * 1024)).toFixed(2) + ' MB',
-              arch,
-              isMismatch,
-            });
-          });
-        });
-
-        setImages(formattedImages);
       } catch (err) {
         console.error('Failed to fetch native docker images', err);
       }

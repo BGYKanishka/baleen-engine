@@ -13,6 +13,7 @@ export interface DockerImage {
   size: string;
   arch?: string;
   isMismatch?: boolean;
+  id?: string;
 }
 
 export interface TransferStream {
