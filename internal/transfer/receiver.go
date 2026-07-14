@@ -105,12 +105,14 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 
 	ok := receiveAndApprove(req, encoder, approvalChan)
 	if !ok {
+		recordCommitWithStatus(req, engineLedger, "Rejected")
 		return
 	}
 
 	_, _, dbPath, _, err := config.SetupBaleenDirectory()
 	if err != nil {
 		slog.Error("error getting directories", "error", err)
+		recordCommitWithStatus(req, engineLedger, "Failed")
 		return
 	}
 
@@ -118,12 +120,12 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 
 	if err := encoder.Encode(TransferResponse{Approved: true, MissingLayers: missingLayers}); err != nil {
 		slog.Error("failed to send negotiation response", "error", err)
+		recordCommitWithStatus(req, engineLedger, "Failed")
 		return
 	}
 
 	layerCacheDir := filepath.Join(filepath.Dir(dbPath), "layers")
 
-	//pass req metadata into downloadPayload
 	targetPath, err := downloadPayload(decoder, conn, incomingDir, req.ImageName, req.Author)
 	if err != nil {
 		slog.Error("error occurred", "error", err)
@@ -131,6 +133,7 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 			Direction: "pull", Image: req.ImageName, Peer: req.Author,
 			Progress: 0, Speed: "", Status: "failed",
 		})
+		recordCommitWithStatus(req, engineLedger, ParseErrorToStatus(err))
 		return
 	}
 
@@ -138,6 +141,7 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	if err != nil {
 		slog.Error("error occurred", "error", err)
 		os.Remove(targetPath)
+		recordCommitWithStatus(req, engineLedger, ParseErrorToStatus(err))
 		return
 	}
 	os.Remove(targetPath)
@@ -146,7 +150,7 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 
 	updateCacheAndLedger(reconstructedPath, layerCacheDir, req.Layers, missingLayers, engineLedger)
 
-	recordCommit(req, engineLedger)
+	recordCommitWithStatus(req, engineLedger, "Completed")
 
 	downloadedChan <- DownloadResult{
 		Path:      reconstructedPath,
@@ -298,14 +302,14 @@ func updateCacheAndLedger(reconstructedPath string, layerCacheDir string, allLay
 }
 
 // writes a transfer entry to the ledger history
-func recordCommit(req TransferRequest, engineLedger *ledger.Ledger) {
+func recordCommitWithStatus(req TransferRequest, engineLedger *ledger.Ledger, status string) {
 	commit := ledger.Commit{
 		Hash:      req.Hash,
 		Image:     req.ImageName,
 		Author:    req.Author,
 		Timestamp: time.Now().Format(time.RFC3339),
 		Direction: "Imported",
-		Status:    "Completed",
+		Status:    status,
 	}
 	if err := engineLedger.RecordCommit(commit); err != nil {
 		slog.Error("failed to write transfer to ledger", "error", err)

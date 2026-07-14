@@ -244,7 +244,7 @@ func streamPayload(encoder *json.Encoder, conn *tls.Conn, prunedPath string, pru
 	}
 
 	if pw.canceled.Load() {
-		return nil
+		return fmt.Errorf("transfer canceled")
 	}
 
 	// publish completed
