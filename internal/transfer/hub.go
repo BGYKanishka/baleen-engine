@@ -42,7 +42,7 @@ func (h *Hub) GetAll() []byte {
 	h.mu.Lock()
 	now := time.Now().UnixMilli()
 	for k, v := range h.transfers {
-		done := v.Status == "completed" || v.Status == "failed" || v.Status == "rejected"
+		done := v.Status == "completed" || v.Status == "failed" || v.Status == "rejected" || v.Status == "cancelled"
 		if done && now-v.UpdatedAt > 10_000 {
 			delete(h.transfers, k)
 		}

@@ -8,6 +8,10 @@ type TransferRequest struct {
 	Author    string   `json:"author"`
 	ImageArch string   `json:"image_arch"`
 	Layers    []string `json:"layers"`
+	IsControl bool     `json:"is_control,omitempty"`
+	Action    string   `json:"action,omitempty"`
+	// Initiator identifies which side sent a control message: "sender" or "receiver".
+	Initiator string `json:"initiator,omitempty"`
 }
 
 type TransferResponse struct {

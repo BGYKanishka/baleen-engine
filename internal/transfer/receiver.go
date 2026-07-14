@@ -57,12 +57,56 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	decoder := json.NewDecoder(conn)
 	encoder := json.NewEncoder(conn)
 
-	req, ok := receiveAndApprove(decoder, encoder, approvalChan)
+	var req TransferRequest
+	if err := decoder.Decode(&req); err != nil {
+		return
+	}
+
+	if req.IsControl {
+		switch req.Action {
+		case "pause":
+			if req.Initiator == "sender" {
+				// Sender paused. The data stream will stall naturally.
+				// Update UI status without blocking the read loop.
+				if pw, ok := GlobalManager.Get(req.ImageName, req.Author); ok {
+					pw.NotifyPausedBy("sender")
+				}
+			} else {
+				if pw, ok := GlobalManager.Get(req.ImageName, req.Author); ok {
+					pw.Pause(req.Initiator)
+				}
+			}
+		case "resume":
+			if req.Initiator == "sender" {
+				// Sender resumed. Clear the paused state.
+				if pw, ok := GlobalManager.Get(req.ImageName, req.Author); ok {
+					pw.NotifyResumed()
+				}
+			} else {
+				if pw, ok := GlobalManager.Get(req.ImageName, req.Author); ok {
+					pw.Resume(req.Initiator)
+				}
+			}
+		case "cancel":
+			if pw, ok := GlobalManager.Get(req.ImageName, req.Author); ok {
+				pw.Cancel()
+			} else {
+				// No active transfer. Check if it's a pre-streaming cancel.
+				if peer, ok := GlobalManager.CancelApproval(req.ImageName); ok {
+					PublishStatus(req.ImageName, peer, "pull", "cancelled")
+				}
+			}
+		}
+		return
+	}
+
+	// Publish "waiting for approval" before blocking on the channel.
+	PublishStatus(req.ImageName, req.Author, "pull", "waiting for approval")
+
+	ok := receiveAndApprove(req, encoder, approvalChan)
 	if !ok {
 		return
 	}
-	//publish receiving
-	PublishStatus(req.ImageName, req.Author, "pull", "waiting for approval")
 
 	_, _, dbPath, _, err := config.SetupBaleenDirectory()
 	if err != nil {
@@ -110,26 +154,25 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	}
 }
 
-// decodes the incoming TransferRequest, asks for user approval
-func receiveAndApprove(decoder *json.Decoder, encoder *json.Encoder, approvalChan chan ApprovalRequest) (TransferRequest, bool) {
-	var req TransferRequest
-	if err := decoder.Decode(&req); err != nil {
-		return req, false
-	}
+// asks for user approval for the decoded TransferRequest
+func receiveAndApprove(req TransferRequest, encoder *json.Encoder, approvalChan chan ApprovalRequest) bool {
+	// Buffered (size 1) so CancelApproval can inject a rejection.
+	respChan := make(chan bool, 1)
 
-	respChan := make(chan bool)
+	// Register for external cancellation.
+	GlobalManager.RegisterApproval(req.ImageName, req.Author, respChan)
+	defer GlobalManager.UnregisterApproval(req.ImageName)
+
 	approval := ApprovalRequest{Req: req, Response: respChan}
-
-	// Write into the channel for the store to pick up
 	approvalChan <- approval
 
-	// Block until approve/reject is called
+	// Block until approve, reject, or cancel.
 	if approved := <-respChan; !approved {
 		encoder.Encode(TransferResponse{Approved: false})
-		slog.Info("transfer rejected")
-		return req, false
+		slog.Info("transfer rejected", "image", req.ImageName, "author", req.Author)
+		return false
 	}
-	return req, true
+	return true
 }
 
 // checks which layers the receiver already has and splits them into two lists
@@ -167,6 +210,8 @@ func downloadPayload(decoder *json.Decoder, conn net.Conn, incomingDir string, i
 
 	//track progress
 	pw := newProgressWriter(file, streamHeader.PrunedSize, image, peer, "pull")
+	pw.ControlConn = conn
+	defer pw.Cleanup()
 	bytesReceived, err := io.Copy(pw, conn)
 	file.Close()
 	if err != nil {
