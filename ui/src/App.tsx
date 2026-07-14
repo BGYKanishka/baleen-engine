@@ -7,6 +7,7 @@ import TransfersTab from './components/TransfersTab';
 import LedgerTab from './components/LedgerTab';
 import LogsTab from './components/LogsTab';
 import ApprovalNotification from './components/ApprovalNotification';
+import NetworkSphere from './components/NetworkSphere';
 import { useState } from 'react';
 
 const ddClient = createDockerDesktopClient();
@@ -33,11 +34,7 @@ export default function App() {
     return (
       <div className="flex flex-col h-screen items-center justify-center gap-6 bg-white dark:bg-gray-900">
         {/* Icon */}
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" className="text-gray-300 dark:text-gray-600">
-          <rect x="2" y="5"    width="20" height="3" rx="1.5" />
-          <rect x="2" y="10.5" width="20" height="3" rx="1.5" />
-          <rect x="2" y="16"  width="20" height="3" rx="1.5" />
-        </svg>
+        <NetworkSphere className="w-32 h-32 opacity-80" />
 
         <div className="text-center space-y-1">
           <div className="text-gray-700 dark:text-gray-300 font-semibold text-lg">Baleen is not running</div>
@@ -93,11 +90,7 @@ export default function App() {
       {/* Header */}
       <header className="bg-gray-50 dark:bg-gray-800 p-4 flex justify-between items-center border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <h1 className="text-xl font-bold flex items-center gap-3">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" className="text-blue-600 dark:text-blue-400">
-            <rect x="2" y="5"    width="20" height="3" rx="1.5" />
-            <rect x="2" y="10.5" width="20" height="3" rx="1.5" />
-            <rect x="2" y="16"  width="20" height="3" rx="1.5" />
-          </svg>
+          <NetworkSphere className="w-7 h-7" />
           <span className="bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-3 py-1 rounded-md text-sm font-semibold shadow-sm">
             Baleen
           </span>
