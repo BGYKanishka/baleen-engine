@@ -14,6 +14,25 @@ const ddClient = createDockerDesktopClient();
 export default function App() {
   const { status, port, token, nodeName, logs, errorMsg, startDaemon, stopDaemon } = useDaemon(ddClient);
   const [activeTab, setActiveTab] = useState('peers');
+  const [isInstalling, setIsInstalling] = useState(false);
+
+  const handleInstallCLI = async () => {
+    try {
+      setIsInstalling(true);
+      if (!ddClient.extension?.host) {
+        throw new Error("Extension host is not available");
+      }
+      const result = await ddClient.extension.host.cli.exec('baleen', ['install-cli']);
+      // If the command succeeds, show a success toast
+      ddClient.desktopUI.toast.success("CLI installed! You can now run 'docker baleen' in your terminal.");
+    } catch (e: any) {
+      // e could contain e.stderr or e.message
+      const errText = e.stderr || e.stdout || e.message || String(e);
+      ddClient.desktopUI.toast.error(`Failed to install CLI: ${errText}`);
+    } finally {
+      setIsInstalling(false);
+    }
+  };
 
   // ── Checking / connecting ─────────────────────────────────────────────────
   if (status === 'checking') {
@@ -104,6 +123,14 @@ export default function App() {
         </h1>
 
         <div className="flex items-center gap-4">
+          <button
+            onClick={handleInstallCLI}
+            disabled={isInstalling}
+            className="text-sm bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 px-3 py-1 rounded transition flex items-center gap-2"
+          >
+            {isInstalling ? 'Installing...' : 'Install Terminal CLI'}
+          </button>
+          
           {/* Running indicator */}
           <span className="flex items-center gap-2 text-sm font-medium text-green-400">
             <span className="h-2 w-2 bg-green-400 rounded-full animate-pulse" />

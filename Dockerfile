@@ -14,18 +14,14 @@ LABEL org.opencontainers.image.vendor="Baleen"
 LABEL com.docker.desktop.extension.api.version="0.3.4"
 LABEL com.docker.desktop.extension.icon="baleen.svg"
 
+ARG TARGETARCH
+
 # Copy the manifest, icon, and the compiled React app
 COPY metadata.json .
 COPY baleen.svg .
 COPY --from=build /app/dist /ui
 
-COPY metadata.json .
-COPY baleen.svg .
-COPY --from=build /app/dist /ui
-
-# Copy the compiled Baleen binaries for different platforms
-COPY build/baleen-darwin-amd64 /bin/darwin/amd64/baleen
-COPY build/baleen-darwin-arm64 /bin/darwin/arm64/baleen
-COPY build/baleen-linux-amd64 /bin/linux/amd64/baleen
-COPY build/baleen-linux-arm64 /bin/linux/arm64/baleen
-COPY build/baleen-windows-amd64.exe /bin/windows/amd64/baleen.exe
+# Copy the compiled Baleen binaries specifically for the target architecture
+COPY build/baleen-darwin-${TARGETARCH} /darwin/baleen
+COPY build/baleen-linux-${TARGETARCH} /linux/baleen
+COPY build/baleen-windows-amd64.exe /windows/baleen.exe

@@ -11,15 +11,13 @@
     "binaries": [
       {
         "darwin": [
-          { "arch": "amd64", "path": "/bin/darwin/amd64/baleen" },
-          { "arch": "arm64", "path": "/bin/darwin/arm64/baleen" }
+          { "path": "/darwin/baleen" }
         ],
         "linux": [
-          { "arch": "amd64", "path": "/bin/linux/amd64/baleen" },
-          { "arch": "arm64", "path": "/bin/linux/arm64/baleen" }
+          { "path": "/linux/baleen" }
         ],
         "windows": [
-          { "arch": "amd64", "path": "/bin/windows/amd64/baleen.exe" }
+          { "path": "/windows/baleen.exe" }
         ]
       }
     ]
