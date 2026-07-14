@@ -106,12 +106,16 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
     }
   };
 
+  const selectedPeerObj = peers.find(p => p.hostname === selectedPeer);
+  const getArchOnly = (archStr: string) => archStr ? archStr.split('/').pop() : '';
+  const hideBuildContext = selectedPeerObj && selectedPeerObj.arch && selectedPeerObj.arch !== 'unknown' && imageArch && getArchOnly(selectedPeerObj.arch) === getArchOnly(imageArch);
+
   const confirmPush = async () => {
     if (!selectedPeer) return;
     setPushing(true);
     try {
       const body: Record<string, string> = { image: pushModal.image, peer: selectedPeer };
-      if (buildContext.trim()) body.buildContext = buildContext.trim();
+      if (!hideBuildContext && buildContext.trim()) body.buildContext = buildContext.trim();
 
       const res = await fetch(`http://127.0.0.1:${port}/api/push`, {
         method: 'POST',
@@ -134,9 +138,6 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
       setPushing(false);
     }
   };
-
-  const selectedPeerObj = peers.find(p => p.hostname === selectedPeer);
-  const hideBuildContext = selectedPeerObj && selectedPeerObj.arch && selectedPeerObj.arch !== 'unknown' && imageArch && selectedPeerObj.arch === imageArch;
 
   return (
     <div className="relative">

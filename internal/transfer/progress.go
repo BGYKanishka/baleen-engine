@@ -147,7 +147,7 @@ func (pw *progressWriter) Resume(requester string) error {
 		return fmt.Errorf("transfer was cancelled")
 	}
 	if pw.pausedBy != "" && pw.pausedBy != requester {
-		return fmt.Errorf("transfer was paused by the %s; only they can resume it", pw.pausedBy)
+		return fmt.Errorf("only the %s can resume this paused transfer", pw.pausedBy)
 	}
 
 	prevPausedBy := pw.pausedBy
