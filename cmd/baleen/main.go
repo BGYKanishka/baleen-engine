@@ -18,6 +18,9 @@ func main() {
 		case "install-cli":
 			runInstallCLI()
 			return
+		case "check-cli":
+			runCheckCLI()
+			return
 		case "docker-cli-plugin-metadata":
 			fmt.Println(`{"SchemaVersion":"0.1.0","Vendor":"Baleen","Version":"v1.0.0","ShortDescription":"Baleen P2P Image Sharing"}`)
 			return
