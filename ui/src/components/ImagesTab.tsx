@@ -151,9 +151,9 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
 
   return (
     <div className="relative">
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      <div className="bg-white/50 dark:bg-white/5 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
         <table className="w-full text-left">
-          <thead className="bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm">
+          <thead className="bg-gray-50/50 dark:bg-black/20 text-gray-700 dark:text-gray-300 text-sm">
             <tr>
               <th className="px-4 py-3">Image Name</th>
               <th className="px-4 py-3">Tag</th>
@@ -161,9 +161,9 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-800/50">
             {images.map((img, i) => (
-              <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+              <tr key={i} className="hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors">
                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">
                   <div className="flex items-center gap-2">
                     {img.name}
@@ -192,7 +192,7 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
 
       {pushModal.isOpen && (
         <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-6 rounded-lg shadow-xl w-[420px] space-y-5">
+          <div className="bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-gray-800 p-6 rounded-xl shadow-2xl w-[420px] space-y-5">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Push Image</h3>
 
             {/* Image name */}
@@ -205,7 +205,7 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Target Peer</p>
               <select
-                className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
+                className="w-full bg-white/50 dark:bg-white/5 border border-gray-300 dark:border-gray-700/50 rounded-lg p-2 text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 transition-all"
                 value={selectedPeer}
                 onChange={(e) => setSelectedPeer(e.target.value)}
               >
@@ -235,7 +235,7 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
                   placeholder="/path/to/your/project"
                   value={buildContext}
                   onChange={(e) => setBuildContext(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white font-mono text-sm placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                  className="w-full bg-white/50 dark:bg-white/5 border border-gray-300 dark:border-gray-700/50 rounded-lg p-2 text-gray-900 dark:text-white font-mono text-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
                 />
                 <p className="text-xs text-gray-600 mt-1">
                   If the receiver has a different CPU architecture, the engine will rebuild the image

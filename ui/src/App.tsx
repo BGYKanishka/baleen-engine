@@ -38,7 +38,7 @@ export default function App() {
   // ── Checking / connecting ─────────────────────────────────────────────────
   if (status === 'checking') {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-3 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400">
+      <div className="flex h-screen flex-col items-center justify-center gap-3 bg-transparent text-gray-600 dark:text-gray-400">
         <svg className="animate-spin h-6 w-6 text-blue-500" viewBox="0 0 24 24" fill="none">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
@@ -51,9 +51,9 @@ export default function App() {
   // Service is stopped — show a start button and instructions.
   if (status === 'stopped') {
     return (
-      <div className="flex flex-col h-screen items-center justify-center gap-6 bg-white dark:bg-gray-900">
+      <div className="flex flex-col h-screen items-center justify-center gap-6 bg-transparent">
         {/* Icon */}
-        <NetworkSphere className="w-32 h-32 opacity-80" />
+        <NetworkSphere className="w-48 h-48 opacity-80" />
 
         <div className="text-center space-y-1">
           <div className="text-gray-700 dark:text-gray-300 font-semibold text-lg">Baleen is not running</div>
@@ -76,7 +76,7 @@ export default function App() {
   // ── Error / lost connection ───────────────────────────────────────────────
   if (status === 'error') {
     return (
-      <div className="flex flex-col h-screen items-center justify-center gap-5 bg-white dark:bg-gray-900">
+      <div className="flex flex-col h-screen items-center justify-center gap-5 bg-transparent">
         <div className="text-red-500 font-bold text-xl">Service Unavailable</div>
         <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg text-gray-700 dark:text-gray-300 font-mono text-sm max-w-lg text-center break-all">
           {errorMsg}
@@ -104,10 +104,10 @@ export default function App() {
 
   // ── Running ───────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-white overflow-hidden">
+    <div className="flex flex-col h-screen bg-transparent text-gray-900 dark:text-white overflow-hidden">
 
       {/* Header */}
-      <header className="bg-gray-50 dark:bg-gray-800 p-4 flex justify-between items-center border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+      <header className="p-4 flex justify-between items-center border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
         <h1 className="text-xl font-bold flex items-center gap-3">
           <NetworkSphere className="w-7 h-7" />
           <span className="bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-3 py-1 rounded-md text-sm font-semibold shadow-sm">
@@ -123,7 +123,7 @@ export default function App() {
           >
             {isInstalling ? 'Installing...' : 'Install Terminal CLI'}
           </button>
-          
+
           {/* Running indicator */}
           <span className="flex items-center gap-2 text-sm font-medium text-green-400">
             <span className="h-2 w-2 bg-green-400 rounded-full animate-pulse" />
@@ -142,17 +142,16 @@ export default function App() {
       </header>
 
       {/* Navigation tabs */}
-      <div className="flex border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 pt-3 flex-shrink-0 gap-1">
+      <div className="flex border-b border-gray-200 dark:border-gray-800 px-6 pt-4 flex-shrink-0 gap-6">
         {(['peers', 'images', 'transfers', 'ledger', 'logs'] as const).map((tab) => (
           <button
             key={tab}
             id={`tab-${tab}`}
             onClick={() => setActiveTab(tab)}
-            className={`px-5 py-2 capitalize font-semibold rounded-t-lg transition-colors duration-200 ${
-              activeTab === tab
-                ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 border-t border-l border-r border-gray-200 dark:border-gray-700'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700'
-            }`}
+            className={`px-1 py-2 capitalize font-medium text-sm transition-all duration-200 border-b-2 -mb-[1px] ${activeTab === tab
+                ? 'text-blue-600 dark:text-blue-400 border-blue-500'
+                : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
+              }`}
           >
             {tab}
           </button>
@@ -160,12 +159,12 @@ export default function App() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-6 bg-white dark:bg-gray-900">
-        {activeTab === 'peers'     && <PeersTab     port={port!} token={token} />}
-        {activeTab === 'images'    && <ImagesTab    port={port!} token={token} ddClient={ddClient} />}
+      <div className="flex-1 overflow-auto p-6 bg-transparent">
+        {activeTab === 'peers' && <PeersTab port={port!} token={token} />}
+        {activeTab === 'images' && <ImagesTab port={port!} token={token} ddClient={ddClient} />}
         {activeTab === 'transfers' && <TransfersTab port={port!} token={token} />}
-        {activeTab === 'ledger'    && <LedgerTab    port={port!} token={token} />}
-        {activeTab === 'logs'      && <LogsTab logs={logs} />}
+        {activeTab === 'ledger' && <LedgerTab port={port!} token={token} />}
+        {activeTab === 'logs' && <LogsTab logs={logs} />}
       </div>
 
       {/* Floating transfer approval */}

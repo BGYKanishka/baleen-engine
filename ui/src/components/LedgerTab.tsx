@@ -18,9 +18,9 @@ export default function LedgerTab({ port, token }: { port: number, token: string
   }, [port, token]);
 
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto">
+    <div className="bg-white/50 dark:bg-white/5 border border-gray-200 dark:border-gray-800 rounded-xl overflow-x-auto shadow-sm">
       <table className="w-full text-left">
-        <thead className="bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm">
+        <thead className="bg-gray-50/50 dark:bg-black/20 text-gray-700 dark:text-gray-300 text-sm">
           <tr>
             <th className="px-4 py-3 whitespace-nowrap">Time</th>
             <th className="px-4 py-3 whitespace-nowrap">Direction</th>
@@ -29,12 +29,12 @@ export default function LedgerTab({ port, token }: { port: number, token: string
             <th className="px-4 py-3 min-w-[300px]">Status</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+        <tbody className="divide-y divide-gray-200 dark:divide-gray-800/50">
           {history.length === 0 && (
             <tr><td colSpan={5} className="text-center py-8 text-gray-500">No ledger entries found.</td></tr>
           )}
           {history.map((record, i) => (
-            <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700 text-sm">
+            <tr key={i} className="hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors text-sm">
               <td className="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">{new Date(record.timestamp).toLocaleString()}</td>
               <td className="px-4 py-3 capitalize whitespace-nowrap">{record.direction}</td>
               <td className="px-4 py-3 font-medium font-mono text-gray-900 dark:text-gray-200 whitespace-nowrap">{record.image}</td>
