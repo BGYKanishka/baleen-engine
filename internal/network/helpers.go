@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/BGYKanishka/baleen-engine/internal/config"
@@ -31,13 +32,22 @@ func DetectRemoteArch(ip string, port int) string {
 	return strings.TrimSpace(string(bodyBytes))
 }
 
-// StartMetadataServer runs a lightweight HTTP server to expose the node's architecture.
-func StartMetadataServer(port int) {
+// runs a lightweight HTTP server to expose the node's architecture.
+func StartMetadataServer(port int, broadcastEnabled *atomic.Bool) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/architecture", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("linux/" + runtime.GOARCH))
 	})
-	
+
+	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		status := "broadcasting"
+		if broadcastEnabled != nil && !broadcastEnabled.Load() {
+			status = "hidden"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"status": "%s"}`, status)
+	})
+
 	addr := fmt.Sprintf(":%d", port)
 	slog.Info("starting metadata server", "port", port)
 	if err := http.ListenAndServe(addr, mux); err != nil {

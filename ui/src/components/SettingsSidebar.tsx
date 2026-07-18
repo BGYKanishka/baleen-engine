@@ -18,7 +18,53 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
   const [draftName, setDraftName] = useState('');
   const nameInputRef = useRef<HTMLInputElement>(null);
 
+  // Network feature flags — loaded from the backend on open
+  const [mdnsDiscovery, setMdnsDiscovery] = useState(true);
+  const [broadcastPresence, setBroadcastPresence] = useState(true);
+  const [networkLoaded, setNetworkLoaded] = useState(false);
+
   const displayName = customName || nodeName || '—';
+
+  // Fetch current network settings whenever the sidebar opens (or port becomes available)
+  useEffect(() => {
+    if (!isOpen || !port) return;
+    fetch(`http://127.0.0.1:${port}/api/network/settings`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        setMdnsDiscovery(data.mdns_discovery ?? true);
+        setBroadcastPresence(data.broadcast_presence ?? true);
+        setNetworkLoaded(true);
+      })
+      .catch(() => setNetworkLoaded(true)); // fail gracefully; keep defaults
+  }, [isOpen, port, token]);
+
+  const patchNetworkSetting = async (key: 'mdns_discovery' | 'broadcast_presence', value: boolean) => {
+    if (!port) return;
+    try {
+      await fetch(`http://127.0.0.1:${port}/api/network/settings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ [key]: value }),
+      });
+    } catch {
+      // API unreachable — toggle UI state was already optimistically updated
+    }
+  };
+
+  const handleDiscoveryChange = (checked: boolean) => {
+    setMdnsDiscovery(checked);
+    patchNetworkSetting('mdns_discovery', checked);
+  };
+
+  const handleBroadcastChange = (checked: boolean) => {
+    setBroadcastPresence(checked);
+    patchNetworkSetting('broadcast_presence', checked);
+  };
 
   const startEditing = () => {
     setDraftName(customName || nodeName || '');
@@ -180,18 +226,30 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
           </Section>
 
           <Section title="Network">
-            <ToggleRow id="setting-discovery" label="mDNS Discovery" description="Automatically discover peers on local network" defaultChecked />
-            <ToggleRow id="setting-broadcast" label="Broadcast Presence" description="Let other Baleen nodes find this node" defaultChecked />
+            <ToggleRow
+              id="setting-discovery"
+              label="mDNS Discovery"
+              description="Automatically discover peers on local network"
+              checked={networkLoaded ? mdnsDiscovery : true}
+              onChange={handleDiscoveryChange}
+            />
+            <ToggleRow
+              id="setting-broadcast"
+              label="Broadcast Presence"
+              description="Let other Baleen nodes find this node"
+              checked={networkLoaded ? broadcastPresence : true}
+              onChange={handleBroadcastChange}
+            />
           </Section>
 
           <Section title="Transfers">
-            <ToggleRow id="setting-auto-approve" label="Auto-approve requests" description="Automatically approve incoming image requests" defaultChecked={false} />
+            <ToggleRow id="setting-auto-approve" label="Auto-approve requests" description="Automatically approve incoming image requests" checked={false} />
             <SliderRow id="setting-bandwidth" label="Max Bandwidth" unit="MB/s" min={1} max={100} defaultValue={50} />
           </Section>
 
           <Section title="Security">
             <InfoRow label="Auth Mode" value="Bearer Token" />
-            <ToggleRow id="setting-tls" label="TLS Encryption" description="Encrypt all peer-to-peer communication" defaultChecked />
+            <ToggleRow id="setting-tls" label="TLS Encryption" description="Encrypt all peer-to-peer communication" checked />
           </Section>
 
           <Section title="About">
@@ -242,12 +300,14 @@ function ToggleRow({
   id,
   label,
   description,
-  defaultChecked,
+  checked,
+  onChange,
 }: {
   id: string;
   label: string;
   description: string;
-  defaultChecked: boolean;
+  checked: boolean;
+  onChange?: (checked: boolean) => void;
 }) {
   return (
     <div className="flex items-start justify-between gap-3 px-4 py-3">
@@ -256,7 +316,13 @@ function ToggleRow({
         <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-snug">{description}</p>
       </div>
       <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 mt-0.5">
-        <input id={id} type="checkbox" defaultChecked={defaultChecked} className="sr-only peer" />
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange?.(e.target.checked)}
+          className="sr-only peer"
+        />
         <div className="w-9 h-5 rounded-full peer bg-gray-300 dark:bg-gray-600 peer-checked:bg-blue-600 after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
       </label>
     </div>

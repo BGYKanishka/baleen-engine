@@ -24,7 +24,9 @@ func TestE2E_PushReceive_FullFlow(t *testing.T) {
 	listener, addr := testListener(t, tlsCfg)
 	approvalChan := make(chan ApprovalRequest, 1)
 	downloadedChan := make(chan DownloadResult, 1)
-	go StartReceiver(context.Background(), &sync.WaitGroup{}, listener, incomingDir, approvalChan, downloadedChan, db, &atomic.Int32{})
+	accepting := &atomic.Bool{}
+	accepting.Store(true)
+	go StartReceiver(context.Background(), &sync.WaitGroup{}, listener, incomingDir, approvalChan, downloadedChan, db, &atomic.Int32{}, accepting)
 	go autoApprove(approvalChan, true)
 
 	tarPath := buildMinimalDockerTarball(t,
@@ -52,7 +54,9 @@ func TestE2E_PushReceive_Rejected(t *testing.T) {
 	listener, addr := testListener(t, tlsCfg)
 	approvalChan := make(chan ApprovalRequest, 1)
 	downloadedChan := make(chan DownloadResult, 1)
-	go StartReceiver(context.Background(), &sync.WaitGroup{}, listener, incomingDir, approvalChan, downloadedChan, db, &atomic.Int32{})
+	accepting := &atomic.Bool{}
+	accepting.Store(true)
+	go StartReceiver(context.Background(), &sync.WaitGroup{}, listener, incomingDir, approvalChan, downloadedChan, db, &atomic.Int32{}, accepting)
 	go autoApprove(approvalChan, false) // ← reject
 
 	tarPath := buildMinimalDockerTarball(t, []string{sha256Digest([]byte("layerA"))})
@@ -102,7 +106,9 @@ func TestE2E_DeltaTransfer_ReceiverAlreadyHasLayer(t *testing.T) {
 	listener, addr := testListener(t, tlsCfg)
 	approvalChan := make(chan ApprovalRequest, 1)
 	downloadedChan := make(chan DownloadResult, 1)
-	go StartReceiver(context.Background(), &sync.WaitGroup{}, listener, incomingDir, approvalChan, downloadedChan, db, &atomic.Int32{})
+	accepting := &atomic.Bool{}
+	accepting.Store(true)
+	go StartReceiver(context.Background(), &sync.WaitGroup{}, listener, incomingDir, approvalChan, downloadedChan, db, &atomic.Int32{}, accepting)
 	go autoApprove(approvalChan, true)
 
 	tarPath := buildMinimalDockerTarball(t, []string{layerA, layerB})

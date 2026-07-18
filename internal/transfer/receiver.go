@@ -28,7 +28,7 @@ type DownloadResult struct {
 var isHex = regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString
 
 // runs a background TCP server to listen for incoming files
-func StartReceiver(ctx context.Context, wg *sync.WaitGroup, listener net.Listener, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan DownloadResult, engineLedger *ledger.Ledger, activeTransfers *atomic.Int32) {
+func StartReceiver(ctx context.Context, wg *sync.WaitGroup, listener net.Listener, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan DownloadResult, engineLedger *ledger.Ledger, activeTransfers *atomic.Int32, accepting *atomic.Bool) {
 	defer wg.Done()
 
 	for {
@@ -42,8 +42,23 @@ func StartReceiver(ctx context.Context, wg *sync.WaitGroup, listener net.Listene
 				continue
 			}
 		}
+
+		// If broadcast presence is disabled, refuse the transfer immediately.
+		if accepting != nil && !accepting.Load() {
+			go rejectConnection(conn)
+			continue
+		}
+
 		go handleIncomingTransfer(conn, incomingDir, approvalChan, downloadedChan, engineLedger, activeTransfers)
 	}
+}
+
+// sends a clean rejection response and closes the connection.
+func rejectConnection(conn net.Conn) {
+	defer conn.Close()
+	conn.SetWriteDeadline(time.Now().Add(3 * time.Second))
+	_ = json.NewEncoder(conn).Encode(TransferResponse{Approved: false})
+	slog.Info("rejected incoming transfer: broadcast presence is disabled")
 }
 
 // reads a full Docker tarball and streams
