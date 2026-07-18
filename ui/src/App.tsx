@@ -17,6 +17,11 @@ export default function App() {
   const { status, port, token, nodeName, logs, errorMsg, startDaemon, stopDaemon } = useDaemon(ddClient);
   const [activeTab, setActiveTab] = useState('peers');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // Custom node name — persisted in localStorage, falls back to daemon-assigned name
+  const [customName, setCustomName] = useState<string>(
+    () => localStorage.getItem('baleen-custom-node-name') ?? ''
+  );
+  const displayName = customName || nodeName;
   const [isInstalling, setIsInstalling] = useState(false);
   const [isCliInstalled, setIsCliInstalled] = useState(false);
 
@@ -128,7 +133,13 @@ export default function App() {
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         nodeName={nodeName}
+        customName={customName}
+        onNameChange={(name) => {
+          setCustomName(name);
+          localStorage.setItem('baleen-custom-node-name', name);
+        }}
         port={port}
+        token={token}
       />
 
       {/* Header */}
@@ -164,7 +175,7 @@ export default function App() {
           {/* Running indicator */}
           <span className="flex items-center gap-2 text-sm font-medium text-green-400">
             <span className="h-2 w-2 bg-green-400 rounded-full animate-pulse" />
-            Running (Port {port}) - {nodeName}
+            Running (Port {port}) - {displayName}
           </span>
 
           {/* Stop is the only control when running */}

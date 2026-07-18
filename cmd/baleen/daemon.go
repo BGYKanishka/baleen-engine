@@ -44,7 +44,11 @@ func runDaemon(args []string) {
 	daemonFlags.StringVar(&finalName, "name", "auto", "Name of the Baleen Node")
 	daemonFlags.Parse(args)
 	if finalName == "auto" {
-		finalName = config.GenerateNodeName()
+		if saved := config.LoadNodeName(); saved != "" {
+			finalName = saved
+		} else {
+			finalName = config.GenerateNodeName()
+		}
 	}
 	targetPort := 0
 

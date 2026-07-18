@@ -1,14 +1,58 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface SettingsSidebarProps {
   isOpen: boolean;
   onClose: () => void;
   nodeName: string;
+  customName: string;
+  onNameChange: (name: string) => void;
   port: number | null;
+  token: string;
 }
 
-export default function SettingsSidebar({ isOpen, onClose, nodeName, port }: SettingsSidebarProps) {
+export default function SettingsSidebar({ isOpen, onClose, nodeName, customName, onNameChange, port, token }: SettingsSidebarProps) {
   const sidebarRef = useRef<HTMLDivElement>(null);
+
+  // Editable node name state
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  const displayName = customName || nodeName || '—';
+
+  const startEditing = () => {
+    setDraftName(customName || nodeName || '');
+    setIsEditingName(true);
+    setTimeout(() => nameInputRef.current?.select(), 30);
+  };
+
+  const saveName = async () => {
+    const trimmed = draftName.trim();
+    if (trimmed) {
+      // Persist to backend
+      if (port) {
+        try {
+          await fetch(`http://127.0.0.1:${port}/api/node/name`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ name: trimmed }),
+          });
+        } catch {
+          // API unreachable — still update display
+        }
+      }
+      onNameChange(trimmed); // update App state + localStorage
+    }
+    setIsEditingName(false);
+  };
+
+  const cancelEditing = () => {
+    setIsEditingName(false);
+    setDraftName('');
+  };
 
   // Close on Escape key
   useEffect(() => {
@@ -88,7 +132,49 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, port }: Set
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
 
           <Section title="Node Info">
-            <InfoRow label="Node Name" value={nodeName || '—'} />
+            {/* Editable node name */}
+            <div className="flex justify-between items-center px-4 py-3 gap-2">
+              <span className="text-sm text-gray-500 dark:text-gray-400 flex-shrink-0">Node Name</span>
+              {isEditingName ? (
+                <div className="flex items-center gap-1 flex-1 justify-end">
+                  <input
+                    ref={nameInputRef}
+                    id="node-name-input"
+                    type="text"
+                    value={draftName}
+                    onChange={(e) => setDraftName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') saveName();
+                      if (e.key === 'Escape') cancelEditing();
+                    }}
+                    onBlur={saveName}
+                    className="text-sm font-medium text-right bg-transparent border-b border-blue-500 outline-none text-gray-900 dark:text-gray-100 w-full max-w-[160px]"
+                    autoFocus
+                  />
+                  {/* Cancel */}
+                  <button onClick={cancelEditing} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm text-gray-900 dark:text-gray-200 font-medium truncate max-w-[140px]">{displayName}</span>
+                  <button
+                    id="edit-node-name-btn"
+                    onClick={startEditing}
+                    aria-label="Edit node name"
+                    className="text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors flex-shrink-0"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
             <InfoRow label="API Port" value={port ? String(port) : '—'} />
             <InfoRow label="Protocol" value="Baleen P2P v1" />
           </Section>

@@ -54,6 +54,7 @@ func StartDaemonServer(ctx cli.EngineContext, token string, stopCh chan<- struct
 	mux.HandleFunc("/api/transfer/pause", withHeartbeat(handlers.Pause()))
 	mux.HandleFunc("/api/transfer/resume", withHeartbeat(handlers.Resume()))
 	mux.HandleFunc("/api/transfer/cancel", withHeartbeat(handlers.Cancel()))
+	mux.HandleFunc("/api/node/name", withHeartbeat(handlers.NodeName(ctx)))
 
 	// Stop endpoint: UI/CLI call this when the user clicks the Stop button.
 	mux.HandleFunc("/api/stop", withHeartbeat(func(w http.ResponseWriter, r *http.Request) {
