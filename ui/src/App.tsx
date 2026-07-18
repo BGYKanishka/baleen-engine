@@ -8,6 +8,7 @@ import LedgerTab from './components/LedgerTab';
 import LogsTab from './components/LogsTab';
 import ApprovalNotification from './components/ApprovalNotification';
 import NetworkSphere from './components/NetworkSphere';
+import SettingsSidebar from './components/SettingsSidebar';
 import { useState, useEffect } from 'react';
 
 const ddClient = createDockerDesktopClient();
@@ -15,6 +16,7 @@ const ddClient = createDockerDesktopClient();
 export default function App() {
   const { status, port, token, nodeName, logs, errorMsg, startDaemon, stopDaemon } = useDaemon(ddClient);
   const [activeTab, setActiveTab] = useState('peers');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
   const [isCliInstalled, setIsCliInstalled] = useState(false);
 
@@ -121,11 +123,29 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen bg-transparent text-gray-900 dark:text-white overflow-hidden">
 
+      {/* Settings sidebar */}
+      <SettingsSidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        nodeName={nodeName}
+        port={port}
+      />
+
       {/* Header */}
       <header className="p-4 flex justify-between items-center border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
         <h1 className="text-xl font-bold flex items-center gap-3">
-          <NetworkSphere className="w-7 h-7" />
-          <span className="bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-3 py-1 rounded-md text-sm font-semibold shadow-sm">
+          {/* Hamburger menu button */}
+          <button
+            id="open-settings-btn"
+            onClick={() => setIsSidebarOpen(true)}
+            aria-label="Open settings"
+            className="flex flex-col justify-center items-center gap-[5px] w-8 h-8 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors duration-150"
+          >
+            <span className="block w-5 h-[2px] rounded-full bg-gray-600 dark:bg-gray-300" />
+            <span className="block w-5 h-[2px] rounded-full bg-gray-600 dark:bg-gray-300" />
+            <span className="block w-5 h-[2px] rounded-full bg-gray-600 dark:bg-gray-300" />
+          </button>
+          <span className="text-gray-900 dark:text-white text-base font-semibold">
             Baleen
           </span>
         </h1>

@@ -223,8 +223,8 @@ export function useDaemon(ddClient: any) {
         }
       } catch {
         heartbeatFailsRef.current++;
-        addLog(`[WARN] Heartbeat failed (${heartbeatFailsRef.current}/3)`);
-        if (heartbeatFailsRef.current >= 3) {
+        addLog(`[WARN] Heartbeat failed (${heartbeatFailsRef.current}/1)`);
+        if (heartbeatFailsRef.current >= 1) {
           clearInterval(heartbeatIntervalRef.current!);
           setPort(null);
           portRef.current  = null;
@@ -264,7 +264,7 @@ export function useDaemon(ddClient: any) {
           });
         }
       }
-    }, 2000);
+    }, 500);
 
     return () => {
       if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
