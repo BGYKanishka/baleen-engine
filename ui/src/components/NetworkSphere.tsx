@@ -41,7 +41,8 @@ export default function NetworkSphere({ className = '' }: { className?: string }
     }
 
     function project(x: number, y: number, z: number) {
-      const scale = FOCAL / (FOCAL - z);
+      const zoom = 1.05;
+      const scale = (FOCAL / (FOCAL - z)) * zoom;
       return {
         sx: CX + x * scale,
         sy: CY + y * scale,

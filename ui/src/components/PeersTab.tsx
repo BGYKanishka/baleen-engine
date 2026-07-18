@@ -18,7 +18,7 @@ export default function PeersTab({ port, token }: { port: number, token: string 
 
   useEffect(() => {
     fetchPeers();
-    const interval = setInterval(fetchPeers, 1000); 
+    const interval = setInterval(fetchPeers, 1000);
     return () => clearInterval(interval);
   }, [port, token]);
 
@@ -42,12 +42,12 @@ export default function PeersTab({ port, token }: { port: number, token: string 
       <div className="flex gap-4 items-end">
         <div className="flex-1">
           <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Add Manual Peer (IP Address)</label>
-          <input 
-            type="text" 
+          <input
+            type="text"
             value={manualIp}
             onChange={(e) => setManualIp(e.target.value)}
-            placeholder="192.168.1.100" 
-            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
+            placeholder="192.168.1.100"
+            className="w-full bg-white/50 dark:bg-white/5 border border-gray-300 dark:border-gray-700/50 rounded-lg px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
           />
         </div>
         <button onClick={addManualPeer} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-medium transition">
@@ -55,9 +55,9 @@ export default function PeersTab({ port, token }: { port: number, token: string 
         </button>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      <div className="bg-white/50 dark:bg-white/5 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
         <table className="w-full text-left">
-          <thead className="bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm">
+          <thead className="bg-gray-50/50 dark:bg-black/20 text-gray-700 dark:text-gray-300 text-sm">
             <tr>
               <th className="px-4 py-3">Hostname</th>
               <th className="px-4 py-3">IP Address</th>
@@ -65,13 +65,13 @@ export default function PeersTab({ port, token }: { port: number, token: string 
               <th className="px-4 py-3">Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-800/50">
             {peers.map((peer, i) => (
-              <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+              <tr key={i} className="hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors">
                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{peer.hostname}</td>
                 <td className="px-4 py-3 font-mono text-sm text-gray-600 dark:text-gray-400">{peer.ip}</td>
                 <td className="px-4 py-3">
-                  <span className={`text-xs px-2 py-1 rounded ${peer.source === 'mdns' ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-300' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-300'}`}>
+                  <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${peer.source === 'mdns' ? 'bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300' : 'bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-gray-300'}`}>
                     {peer.source.toUpperCase()}
                   </span>
                 </td>

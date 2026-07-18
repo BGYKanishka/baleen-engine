@@ -108,7 +108,7 @@ export default function TransfersTab({ port, token }: { port: number; token: str
       )}
 
       {transfers.length === 0 ? (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-10 rounded-lg flex flex-col items-center justify-center text-center">
+        <div className="bg-white/50 dark:bg-white/5 border border-gray-200 dark:border-gray-800 p-10 rounded-xl flex flex-col items-center justify-center text-center shadow-sm">
           <svg className="w-12 h-12 text-gray-300 dark:text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
@@ -119,7 +119,7 @@ export default function TransfersTab({ port, token }: { port: number; token: str
         transfers.map((t) => (
           <div
             key={transferKey(t)}
-            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 rounded-lg flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow"
+            className="bg-white/50 dark:bg-white/5 border border-gray-200 dark:border-gray-800 p-5 rounded-xl flex flex-col gap-3 shadow-sm hover:shadow-md transition-all duration-200"
           >
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-3">
@@ -135,7 +135,7 @@ export default function TransfersTab({ port, token }: { port: number; token: str
               )}
             </div>
 
-            <div className="w-full bg-gray-100 dark:bg-gray-700/50 rounded-full h-2 overflow-hidden">
+            <div className="w-full bg-gray-100 dark:bg-black/40 rounded-full h-2 overflow-hidden">
               <div
                 className={`h-full transition-all duration-500 ease-out ${barColor(t.status)}`}
                 style={{ width: `${Math.min(100, Math.max(0, t.progress))}%` }}

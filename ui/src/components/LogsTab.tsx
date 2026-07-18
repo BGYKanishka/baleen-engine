@@ -19,8 +19,8 @@ export default function LogsTab({ logs }: { logs: string[] }) {
   }, [logs, isAutoScroll]);
 
   return (
-    <div className="bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-700 rounded-lg h-full overflow-hidden flex flex-col">
-      <div className="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+    <div className="bg-white/50 dark:bg-black/40 border border-gray-200 dark:border-gray-800 rounded-xl h-full overflow-hidden flex flex-col shadow-sm">
+      <div className="bg-gray-50/50 dark:bg-white/5 px-4 py-2 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
         <span className="text-sm font-semibold text-gray-900 dark:text-white">Daemon Process Logs</span>
         <span className="text-xs text-gray-500 dark:text-gray-400">
           {isAutoScroll ? 'Live Output (Auto-scrolling)' : 'Auto-scroll Paused'}

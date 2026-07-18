@@ -78,6 +78,37 @@ func runInstallCLI() {
 	fmt.Printf("You can now use 'docker baleen' in your terminal.\n")
 }
 
+func runCheckCLI() {
+	// Find the user's home directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to get user home directory: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Determine the target directory for Docker CLI plugins
+	targetDir := filepath.Join(homeDir, ".docker", "cli-plugins")
+	if runtime.GOOS == "windows" {
+		targetDir = filepath.Join(homeDir, ".docker", "cli-plugins")
+	}
+
+	// Determine the target filename
+	targetFileName := "docker-baleen"
+	if runtime.GOOS == "windows" {
+		targetFileName += ".exe"
+	}
+	targetPath := filepath.Join(targetDir, targetFileName)
+
+	// Check if the file exists
+	if _, err := os.Stat(targetPath); err == nil {
+		fmt.Printf("Installed\n")
+		os.Exit(0)
+	} else {
+		fmt.Fprintf(os.Stderr, "Not installed\n")
+		os.Exit(1)
+	}
+}
+
 func copyFile(src, dst string) error {
 	sourceFile, err := os.Open(src)
 	if err != nil {
