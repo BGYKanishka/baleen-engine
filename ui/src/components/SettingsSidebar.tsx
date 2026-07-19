@@ -129,9 +129,8 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
     <>
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 z-40 transition-opacity duration-300 ${
-          isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
+        className={`fixed inset-0 z-40 transition-opacity duration-300 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+          }`}
         style={{ background: 'rgba(0,0,0,0.35)' }}
         aria-hidden="true"
       />
@@ -140,7 +139,7 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
       <div
         ref={sidebarRef}
         className={`fixed top-0 left-0 z-50 h-full flex flex-col transition-all duration-300 ease-in-out
-          bg-white dark:bg-[#1a1c23]
+          bg-white dark:bg-[#11151A]
           border-r border-gray-200 dark:border-white/5
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
         style={{
@@ -155,9 +154,9 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 flex-shrink-0 border-b border-gray-200 dark:border-white/5">
           <div className="flex items-center gap-3">
-            <svg width="22" height="22" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-              <path d="M4 26 C8 18, 16 8, 28 6 C22 12, 18 20, 16 26" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-              <path d="M16 26 C14 22, 10 20, 4 26" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" fill="none" />
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500 dark:text-gray-400">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
             </svg>
             <span className="text-gray-900 dark:text-white font-semibold text-base tracking-wide">Baleen Settings</span>
           </div>
@@ -247,15 +246,12 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
             <SliderRow id="setting-bandwidth" label="Max Bandwidth" unit="MB/s" min={1} max={100} defaultValue={50} />
           </Section>
 
-          <Section title="Security">
-            <InfoRow label="Auth Mode" value="Bearer Token" />
-            <ToggleRow id="setting-tls" label="TLS Encryption" description="Encrypt all peer-to-peer communication" checked />
-          </Section>
-
           <Section title="About">
             <InfoRow label="Extension" value="Baleen Engine" />
             <InfoRow label="Transport" value="HTTP/REST" />
             <InfoRow label="Image Scope" value="Local Docker daemon" />
+            <InfoRow label="Auth Mode" value="Bearer Token" />
+            <InfoRow label="Encryption" value="TLS" />
           </Section>
         </div>
 

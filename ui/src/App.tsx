@@ -197,8 +197,8 @@ export default function App() {
             id={`tab-${tab}`}
             onClick={() => setActiveTab(tab)}
             className={`px-1 py-2 capitalize font-medium text-sm transition-all duration-200 border-b-2 -mb-[1px] ${activeTab === tab
-                ? 'text-blue-600 dark:text-blue-400 border-blue-500'
-                : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
+              ? 'text-blue-600 dark:text-blue-400 border-blue-500'
+              : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
               }`}
           >
             {tab}
