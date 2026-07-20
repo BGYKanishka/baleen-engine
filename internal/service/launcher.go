@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/BGYKanishka/baleen-engine/internal/config"
 )
 
 // BackgroundEnvKey is the environment variable that distinguishes the real
@@ -19,11 +21,11 @@ func IsBackgroundProcess() bool {
 
 // returns the path to the daemon log file.
 func daemonLogPath() (string, error) {
-	homeDir, err := os.UserHomeDir()
+	baleenRoot, err := config.BaleenDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(homeDir, ".baleen", "daemon.log"), nil
+	return filepath.Join(baleenRoot, "daemon.log"), nil
 }
 
 // LaunchBackground launches the background daemon process, which will run

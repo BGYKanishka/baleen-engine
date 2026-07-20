@@ -6,17 +6,19 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/BGYKanishka/baleen-engine/internal/config"
 )
 
 // Logs returns the last 500 lines of the daemon log file as a JSON array.
 func Logs() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		homeDir, err := os.UserHomeDir()
+		baleenRoot, err := config.BaleenDir()
 		if err != nil {
 			http.Error(w, "Cannot resolve home dir", http.StatusInternalServerError)
 			return
 		}
-		logPath := filepath.Join(homeDir, ".baleen", "daemon.log")
+		logPath := filepath.Join(baleenRoot, "daemon.log")
 
 		file, err := os.Open(logPath)
 		if err != nil {

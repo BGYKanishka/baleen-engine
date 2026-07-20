@@ -25,21 +25,21 @@ func GenerateNodeName() string {
 
 // SaveNodeName persists the node name to ~/.baleen/node_name
 func SaveNodeName(name string) error {
-	homeDir, err := os.UserHomeDir()
+	baleenRoot, err := BaleenDir()
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(homeDir, ".baleen", "node_name")
+	path := filepath.Join(baleenRoot, "node_name")
 	return os.WriteFile(path, []byte(strings.TrimSpace(name)), 0644)
 }
 
 // LoadNodeName returns the saved custom node name, or "" if none is set.
 func LoadNodeName() string {
-	homeDir, err := os.UserHomeDir()
+	baleenRoot, err := BaleenDir()
 	if err != nil {
 		return ""
 	}
-	data, err := os.ReadFile(filepath.Join(homeDir, ".baleen", "node_name"))
+	data, err := os.ReadFile(filepath.Join(baleenRoot, "node_name"))
 	if err != nil {
 		return ""
 	}

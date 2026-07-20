@@ -42,3 +42,27 @@ func readManifest(tarPath string) ([]manifestItem, error) {
 
 	return nil, fmt.Errorf("manifest.json not found in tarball")
 }
+
+// returns the manifest item with the most layers from a Docker tarball
+func GetMainManifestItem(tarPath string) (*manifestItem, error) {
+	manifests, err := readManifest(tarPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var maxLayers int
+	var mainItem *manifestItem
+
+	for i, m := range manifests {
+		if len(m.Layers) > maxLayers {
+			maxLayers = len(m.Layers)
+			mainItem = &manifests[i]
+		}
+	}
+
+	if mainItem == nil {
+		return nil, fmt.Errorf("no layers found in manifest")
+	}
+
+	return mainItem, nil
+}

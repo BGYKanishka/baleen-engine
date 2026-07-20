@@ -71,8 +71,6 @@ func NetworkSettings(ctx cli.EngineContext) http.HandlerFunc {
 				"broadcast_presence": updated.BroadcastPresence,
 			})
 
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	}
 }

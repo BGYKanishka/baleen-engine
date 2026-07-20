@@ -8,23 +8,31 @@ import (
 // MetadataPortOffset is the offset added to the main port to determine the metadata server port
 const MetadataPortOffset = 1
 
-// returns the path to the running-service state file.
-func ServiceStatePath() (string, error) {
+// BaleenDir returns the path to the user's .baleen directory.
+func BaleenDir() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(homeDir, ".baleen", "service.json"), nil
+	return filepath.Join(homeDir, ".baleen"), nil
+}
+
+// returns the path to the running-service state file.
+func ServiceStatePath() (string, error) {
+	baleenRoot, err := BaleenDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(baleenRoot, "service.json"), nil
 }
 
 // creates the folder and returns paths
 func SetupBaleenDirectory() (string, string, string, string, error) {
-	homeDir, err := os.UserHomeDir()
+	baleenRoot, err := BaleenDir()
 	if err != nil {
 		return "", "", "", "", err
 	}
 
-	baleenRoot := filepath.Join(homeDir, ".baleen")
 	tempDir := filepath.Join(baleenRoot, "temp")
 	incomingDir := filepath.Join(baleenRoot, "incoming")
 	dbPath := filepath.Join(baleenRoot, "baleen.db")

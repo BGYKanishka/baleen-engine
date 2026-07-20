@@ -4,12 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"time"
 
 	"github.com/BGYKanishka/baleen-engine/internal/docker"
-	"github.com/BGYKanishka/baleen-engine/internal/ledger"
-	"github.com/BGYKanishka/baleen-engine/internal/network"
-	"github.com/BGYKanishka/baleen-engine/internal/transfer"
 	"github.com/chzyer/readline"
 )
 
@@ -19,7 +15,7 @@ func handlePush(parts []string, rl *readline.Instance, inputChan chan string, sy
 		return
 	}
 
-	targetIP, targetPort, fingerprint, err := network.ResolveTargetAddress(ctx.PeerRegistry, parts[1])
+	targetIP, targetPort, fingerprint, targetArch, err := ResolveAndDetect(ctx, parts[1])
 	if err != nil {
 		slog.Error("failed to resolve target", "error", err)
 		return
@@ -33,10 +29,8 @@ func handlePush(parts []string, rl *readline.Instance, inputChan chan string, sy
 		buildContext = parts[3]
 	}
 
-	fmt.Printf("\nPinging %s to detect architecture...\n", targetIP)
-	targetArch := network.DetectRemoteArch(targetIP, targetPort)
 	if targetArch == "linux/amd64" {
-		fmt.Printf("Could not reach pre-flight server at %s. Falling back to linux/amd64\n", targetIP)
+		fmt.Printf("Target architecture detected (or fallback): %s\n", targetArch)
 	} else {
 		fmt.Printf("Target architecture detected: %s\n", targetArch)
 	}
@@ -57,7 +51,7 @@ func handlePush(parts []string, rl *readline.Instance, inputChan chan string, sy
 		return
 	}
 
-	recordAndPush(ctx, exportedFilePath, targetImage, finalArch, targetIP, targetPort, fingerprint)
+	RecordAndPush(ctx, exportedFilePath, targetImage, finalArch, targetIP, targetPort, fingerprint, "")
 }
 
 // runs the Docker export
@@ -87,27 +81,4 @@ func exportWithFallback(ctx EngineContext, cfg docker.PreflightConfig, rl *readl
 	}
 
 	return
-}
-
-// writes the export to the ledger then streams it to the target node.
-func recordAndPush(ctx EngineContext, exportedPath, image, arch, targetIP string, targetPort int, fingerprint string) {
-	fmt.Printf("Streaming image to disk at: %s\n", exportedPath)
-
-	hash, _ := ledger.GenerateHash(exportedPath)
-	pushErr := transfer.PushImage(targetIP, targetPort, fingerprint, exportedPath, image, hash, ctx.NodeName, arch, ctx.TLSConfig)
-
-	if pushErr != nil {
-		slog.Error("push failed", "error", pushErr)
-	}
-	commit := ledger.Commit{
-		Hash:      hash,
-		Image:     image,
-		Author:    ctx.NodeName,
-		Timestamp: time.Now().Format(time.RFC3339),
-		Direction: "Exported",
-		Status:    transfer.ParseErrorToStatus(pushErr),
-	}
-	if err := ctx.EngineLedger.RecordCommit(commit); err != nil {
-		slog.Error("failed to write transfer to ledger", "error", err)
-	}
 }

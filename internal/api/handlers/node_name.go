@@ -40,8 +40,6 @@ func NodeName(ctx cli.EngineContext) http.HandlerFunc {
 				"name":   name,
 			})
 
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	}
 }

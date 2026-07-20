@@ -65,8 +65,6 @@ func Peers(ctx cli.EngineContext) http.HandlerFunc {
 			ctx.PeerRegistry.RemovePeer(name)
 			w.WriteHeader(http.StatusOK)
 
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}
 }

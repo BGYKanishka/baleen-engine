@@ -21,11 +21,11 @@ func defaultNetworkSettings() NetworkSettings {
 }
 
 func networkSettingsPath() (string, error) {
-	homeDir, err := os.UserHomeDir()
+	baleenRoot, err := BaleenDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(homeDir, ".baleen", "network_settings.json"), nil
+	return filepath.Join(baleenRoot, "network_settings.json"), nil
 }
 
 // reads the persisted settings file
