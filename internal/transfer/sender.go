@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/BGYKanishka/baleen-engine/internal/config"
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
 )
 
@@ -230,7 +231,13 @@ func streamPayload(encoder *json.Encoder, conn *tls.Conn, prunedPath string, pru
 		}
 	}()
 
-	bytesSent, err := io.Copy(pw, prunedFile)
+	settings := config.LoadTransferSettings()
+	var reader io.Reader = prunedFile
+	if settings.MaxBandwidth > 0 {
+		reader = NewThrottledReader(prunedFile, settings.MaxBandwidth*1024*1024)
+	}
+
+	bytesSent, err := io.Copy(pw, reader)
 	if err != nil && !pw.canceled.Load() {
 		GlobalHub.Publish(ProgressEvent{
 			Direction: "push",

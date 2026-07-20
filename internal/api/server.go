@@ -58,6 +58,8 @@ func StartDaemonServer(ctx cli.EngineContext, token string, stopCh chan<- struct
 	mux.HandleFunc("POST /api/node/name", withHeartbeat(handlers.NodeName(ctx)))
 	mux.HandleFunc("GET /api/network/settings", withHeartbeat(handlers.NetworkSettings(ctx)))
 	mux.HandleFunc("POST /api/network/settings", withHeartbeat(handlers.NetworkSettings(ctx)))
+	mux.HandleFunc("GET /api/transfer/settings", withHeartbeat(handlers.TransferSettings()))
+	mux.HandleFunc("POST /api/transfer/settings", withHeartbeat(handlers.TransferSettings()))
 
 	// Stop endpoint: UI/CLI call this when the user clicks the Stop button.
 	mux.HandleFunc("POST /api/stop", withHeartbeat(func(w http.ResponseWriter, r *http.Request) {

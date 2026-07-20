@@ -23,6 +23,12 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
   const [broadcastPresence, setBroadcastPresence] = useState(true);
   const [networkLoaded, setNetworkLoaded] = useState(false);
 
+  // Transfer settings
+  const [autoApprove, setAutoApprove] = useState(false);
+  const [limitBandwidth, setLimitBandwidth] = useState(true);
+  const [maxBandwidth, setMaxBandwidth] = useState(50);
+  const [transferLoaded, setTransferLoaded] = useState(false);
+
   const displayName = customName || nodeName || '—';
 
   // Fetch current network settings whenever the sidebar opens (or port becomes available)
@@ -38,6 +44,19 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
         setNetworkLoaded(true);
       })
       .catch(() => setNetworkLoaded(true)); // fail gracefully; keep defaults
+
+    fetch(`http://127.0.0.1:${port}/api/transfer/settings`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        setAutoApprove(data.auto_approve ?? false);
+        const maxBw = data.max_bandwidth ?? 50;
+        setLimitBandwidth(maxBw > 0);
+        setMaxBandwidth(maxBw > 0 ? maxBw : 50);
+        setTransferLoaded(true);
+      })
+      .catch(() => setTransferLoaded(true));
   }, [isOpen, port, token]);
 
   const patchNetworkSetting = async (key: 'mdns_discovery' | 'broadcast_presence', value: boolean) => {
@@ -64,6 +83,37 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
   const handleBroadcastChange = (checked: boolean) => {
     setBroadcastPresence(checked);
     patchNetworkSetting('broadcast_presence', checked);
+  };
+
+  const patchTransferSetting = async (key: 'auto_approve' | 'max_bandwidth', value: boolean | number) => {
+    if (!port) return;
+    try {
+      await fetch(`http://127.0.0.1:${port}/api/transfer/settings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ [key]: value }),
+      });
+    } catch {
+      // API unreachable
+    }
+  };
+
+  const handleAutoApproveChange = (checked: boolean) => {
+    setAutoApprove(checked);
+    patchTransferSetting('auto_approve', checked);
+  };
+
+  const handleLimitBandwidthChange = (checked: boolean) => {
+    setLimitBandwidth(checked);
+    patchTransferSetting('max_bandwidth', checked ? maxBandwidth : 0);
+  };
+
+  const handleBandwidthChange = (value: number) => {
+    setMaxBandwidth(value);
+    patchTransferSetting('max_bandwidth', value);
   };
 
   const startEditing = () => {
@@ -242,8 +292,31 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
           </Section>
 
           <Section title="Transfers">
-            <ToggleRow id="setting-auto-approve" label="Auto-approve requests" description="Automatically approve incoming image requests" checked={false} />
-            <SliderRow id="setting-bandwidth" label="Max Bandwidth" unit="MB/s" min={1} max={100} defaultValue={50} />
+            <ToggleRow 
+              id="setting-auto-approve" 
+              label="Auto-approve requests" 
+              description="Automatically approve incoming image requests" 
+              checked={transferLoaded ? autoApprove : false} 
+              onChange={handleAutoApproveChange}
+            />
+            <ToggleRow 
+              id="setting-limit-bandwidth" 
+              label="Limit Bandwidth" 
+              description="Restrict transfer speeds to save network resources" 
+              checked={transferLoaded ? limitBandwidth : true} 
+              onChange={handleLimitBandwidthChange}
+            />
+            {limitBandwidth && (
+              <SliderRow 
+                id="setting-bandwidth" 
+                label="Max Bandwidth" 
+                unit="MB/s" 
+                min={1} 
+                max={1000} 
+                value={transferLoaded ? maxBandwidth : 50} 
+                onChange={handleBandwidthChange}
+              />
+            )}
           </Section>
 
           <Section title="About">
@@ -331,21 +404,29 @@ function SliderRow({
   unit,
   min,
   max,
-  defaultValue,
+  value,
+  onChange,
 }: {
   id: string;
   label: string;
   unit: string;
   min: number;
   max: number;
-  defaultValue: number;
+  value: number;
+  onChange?: (val: number) => void;
 }) {
+  const [localVal, setLocalVal] = useState(value);
+
+  useEffect(() => {
+    setLocalVal(value);
+  }, [value]);
+
   return (
     <div className="px-4 py-3">
       <div className="flex justify-between items-center mb-2">
         <span className="text-sm text-gray-800 dark:text-gray-200">{label}</span>
         <span id={`${id}-value`} className="text-xs font-medium text-blue-500 dark:text-blue-400">
-          {defaultValue} {unit}
+          {localVal} {unit}
         </span>
       </div>
       <input
@@ -353,11 +434,12 @@ function SliderRow({
         type="range"
         min={min}
         max={max}
-        defaultValue={defaultValue}
+        value={localVal}
         onChange={(e) => {
-          const el = document.getElementById(`${id}-value`);
-          if (el) el.textContent = `${e.target.value} ${unit}`;
+          setLocalVal(Number(e.target.value));
         }}
+        onMouseUp={() => onChange?.(localVal)}
+        onTouchEnd={() => onChange?.(localVal)}
         className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-gray-200 dark:bg-gray-700"
         style={{ accentColor: '#2563eb' }}
       />
