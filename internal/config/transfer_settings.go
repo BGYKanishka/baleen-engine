@@ -13,10 +13,10 @@ type TransferSettings struct {
 }
 
 // returns the out-of-the-box defaults.
-func defaultTransferSettings() TransferSettings {
+func DefaultTransferSettings() TransferSettings {
 	return TransferSettings{
 		AutoApprove:  false,
-		MaxBandwidth: 50,
+		MaxBandwidth: 0,
 	}
 }
 
@@ -33,15 +33,15 @@ func transferSettingsPath() (string, error) {
 func LoadTransferSettings() TransferSettings {
 	path, err := transferSettingsPath()
 	if err != nil {
-		return defaultTransferSettings()
+		return DefaultTransferSettings()
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return defaultTransferSettings()
+		return DefaultTransferSettings()
 	}
 	var s TransferSettings
 	if err := json.Unmarshal(data, &s); err != nil {
-		return defaultTransferSettings()
+		return DefaultTransferSettings()
 	}
 	return s
 }

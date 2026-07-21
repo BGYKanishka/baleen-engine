@@ -13,7 +13,7 @@ type NetworkSettings struct {
 }
 
 // returns the out-of-the-box defaults (both on).
-func defaultNetworkSettings() NetworkSettings {
+func DefaultNetworkSettings() NetworkSettings {
 	return NetworkSettings{
 		MDNSDiscovery:     true,
 		BroadcastPresence: true,
@@ -33,15 +33,15 @@ func networkSettingsPath() (string, error) {
 func LoadNetworkSettings() NetworkSettings {
 	path, err := networkSettingsPath()
 	if err != nil {
-		return defaultNetworkSettings()
+		return DefaultNetworkSettings()
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return defaultNetworkSettings()
+		return DefaultNetworkSettings()
 	}
 	var s NetworkSettings
 	if err := json.Unmarshal(data, &s); err != nil {
-		return defaultNetworkSettings()
+		return DefaultNetworkSettings()
 	}
 	return s
 }

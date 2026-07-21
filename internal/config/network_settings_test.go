@@ -7,7 +7,7 @@ import (
 )
 
 func TestDefaultNetworkSettings(t *testing.T) {
-	s := defaultNetworkSettings()
+	s := DefaultNetworkSettings()
 	if !s.MDNSDiscovery || !s.BroadcastPresence {
 		t.Errorf("Expected defaults to be true, got MDNS=%v Broadcast=%v", s.MDNSDiscovery, s.BroadcastPresence)
 	}
