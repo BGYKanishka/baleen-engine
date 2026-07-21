@@ -162,7 +162,7 @@ func runDaemon(args []string) {
 	}()
 
 	cliContext := cli.EngineContext{
-		NodeName:          finalName,
+		GetNodeName:       netController.GetNodeName,
 		TempDir:           tempDir,
 		ActualPort:        p2pPort,
 		PeerRegistry:      peerRegistry,

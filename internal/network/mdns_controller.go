@@ -11,6 +11,15 @@ import (
 type NetworkController struct {
 	discoveryEnabled atomic.Bool
 	broadcastEnabled atomic.Bool
+
+	mu          sync.RWMutex
+	nodeName    string
+	port        int
+	fingerprint string
+	registry    *PeerRegistry
+	parentCtx   context.Context
+	cancelCtx   context.CancelFunc
+	wg          *sync.WaitGroup
 }
 
 // starts both mDNS goroutines immediately and sets their
@@ -24,16 +33,53 @@ func NewNetworkController(
 	discoveryEnabled bool,
 	broadcastEnabled bool,
 ) *NetworkController {
-	nc := &NetworkController{}
+	nc := &NetworkController{
+		nodeName:    nodeName,
+		port:        port,
+		fingerprint: fingerprint,
+		registry:    registry,
+		parentCtx:   parentCtx,
+	}
 	nc.discoveryEnabled.Store(discoveryEnabled)
 	nc.broadcastEnabled.Store(broadcastEnabled)
 
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go DiscoverPeers(parentCtx, &wg, nodeName, registry, &nc.discoveryEnabled)
-	go StartBroadcaster(parentCtx, &wg, nodeName, port, fingerprint, &nc.broadcastEnabled)
+	nc.startRoutines()
 
 	return nc
+}
+
+func (nc *NetworkController) startRoutines() {
+	ctx, cancel := context.WithCancel(nc.parentCtx)
+	nc.cancelCtx = cancel
+	nc.wg = &sync.WaitGroup{}
+	nc.wg.Add(2)
+
+	go DiscoverPeers(ctx, nc.wg, nc.nodeName, nc.registry, &nc.discoveryEnabled)
+	go StartBroadcaster(ctx, nc.wg, nc.nodeName, nc.port, nc.fingerprint, &nc.broadcastEnabled)
+}
+
+// updates the node name and restarts mDNS routines if the name changed.
+func (nc *NetworkController) UpdateNodeName(newName string) {
+	nc.mu.Lock()
+	defer nc.mu.Unlock()
+
+	if nc.nodeName == newName {
+		return
+	}
+	nc.nodeName = newName
+
+	if nc.cancelCtx != nil {
+		nc.cancelCtx()
+		nc.wg.Wait()
+	}
+	nc.startRoutines()
+}
+
+// returns the current node name safely.
+func (nc *NetworkController) GetNodeName() string {
+	nc.mu.RLock()
+	defer nc.mu.RUnlock()
+	return nc.nodeName
 }
 
 // enables or disables peer discovery. Takes effect within 500 ms.

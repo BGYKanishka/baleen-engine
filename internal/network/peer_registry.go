@@ -35,6 +35,15 @@ func NewPeerRegistry() *PeerRegistry {
 func (pr *PeerRegistry) AddPeer(name, address, fingerprint string) {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
+
+	// If another peer has the exact same IP/address under a different name, remove it.
+	for existingName, existingAddr := range pr.nodes {
+		if existingAddr == address && existingName != name {
+			delete(pr.nodes, existingName)
+			delete(pr.metadata, existingName)
+		}
+	}
+
 	pr.nodes[name] = address
 
 	// Track metadata for the API invisibly
@@ -110,6 +119,14 @@ func (pr *PeerRegistry) ClearMDNSPeers() {
 func (pr *PeerRegistry) AddCustomPeer(name, address, source string) {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
+
+	for existingName, existingAddr := range pr.nodes {
+		if existingAddr == address && existingName != name {
+			delete(pr.nodes, existingName)
+			delete(pr.metadata, existingName)
+		}
+	}
+
 	pr.nodes[name] = address
 	pr.metadata[name] = &PeerMeta{Source: source, Status: "reachable", Arch: "unknown", Fingerprint: "", LastSeen: time.Now()}
 	go pr.detectAndUpdateArch(name, address)

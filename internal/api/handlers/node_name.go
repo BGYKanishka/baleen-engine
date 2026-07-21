@@ -16,7 +16,7 @@ func NodeName(ctx cli.EngineContext) http.HandlerFunc {
 		switch r.Method {
 
 		case http.MethodGet:
-			json.NewEncoder(w).Encode(map[string]string{"name": ctx.NodeName})
+			json.NewEncoder(w).Encode(map[string]string{"name": ctx.GetNodeName()})
 
 		case http.MethodPost:
 			var req struct {
@@ -34,6 +34,9 @@ func NodeName(ctx cli.EngineContext) http.HandlerFunc {
 			if err := config.SaveNodeName(name); err != nil {
 				http.Error(w, `{"error":"failed to save name"}`, http.StatusInternalServerError)
 				return
+			}
+			if nc := ctx.NetworkController; nc != nil {
+				nc.UpdateNodeName(name)
 			}
 			json.NewEncoder(w).Encode(map[string]string{
 				"status": "saved",

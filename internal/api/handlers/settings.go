@@ -43,11 +43,17 @@ func ResetSettings(ctx cli.EngineContext) http.HandlerFunc {
 			http.Error(w, `{"error":"failed to clear node name: `+err.Error()+`"}`, http.StatusInternalServerError)
 			return
 		}
+		var newName string
+		if nc := ctx.NetworkController; nc != nil {
+			newName = config.GenerateNodeName()
+			nc.UpdateNodeName(newName)
+		}
 
 		json.NewEncoder(w).Encode(map[string]any{
-			"status":   "success",
-			"network":  networkDefaults,
-			"transfer": transferDefaults,
+			"status":    "success",
+			"node_name": newName,
+			"network":   networkDefaults,
+			"transfer":  transferDefaults,
 		})
 	}
 }

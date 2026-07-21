@@ -20,7 +20,7 @@ import (
 
 // EngineContext holds all the dependencies the CLI needs to execute commands
 type EngineContext struct {
-	NodeName          string
+	GetNodeName       func() string
 	TempDir           string
 	ActualPort        int
 	PeerRegistry      *network.PeerRegistry

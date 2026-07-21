@@ -14,7 +14,7 @@ import { useState, useEffect } from 'react';
 const ddClient = createDockerDesktopClient();
 
 export default function App() {
-  const { status, port, token, nodeName, logs, errorMsg, startDaemon, stopDaemon } = useDaemon(ddClient);
+  const { status, port, token, nodeName, logs, errorMsg, startDaemon, stopDaemon, setNodeName } = useDaemon(ddClient);
   const [activeTab, setActiveTab] = useState('peers');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   // Custom node name — persisted in localStorage, falls back to daemon-assigned name
@@ -138,6 +138,7 @@ export default function App() {
           setCustomName(name);
           localStorage.setItem('baleen-custom-node-name', name);
         }}
+        setNodeName={setNodeName}
         port={port}
         token={token}
       />

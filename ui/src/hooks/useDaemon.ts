@@ -300,5 +300,5 @@ export function useDaemon(ddClient: any) {
     };
   }, [status, port, token]);
 
-  return { status, port, token, nodeName, logs, errorMsg, startDaemon, stopDaemon, checkDaemonStatus, setStatus };
+  return { status, port, token, nodeName, logs, errorMsg, startDaemon, stopDaemon, checkDaemonStatus, setStatus, setNodeName };
 }

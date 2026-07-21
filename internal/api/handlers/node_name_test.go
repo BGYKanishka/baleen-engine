@@ -15,7 +15,7 @@ import (
 
 func TestNodeName_Get(t *testing.T) {
 	ctx := cli.EngineContext{
-		NodeName: "TestNode-42",
+		GetNodeName: func() string { return "TestNode-42" },
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/name", nil)

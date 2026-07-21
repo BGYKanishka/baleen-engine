@@ -44,7 +44,7 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 	ctx.EngineLedger.RecordCommit(ledger.Commit{
 		Hash:      tempID,
 		Image:     image,
-		Author:    ctx.NodeName,
+		Author:    ctx.GetNodeName(),
 		Timestamp: time.Now().Format(time.RFC3339),
 		Direction: "Exporting",
 		Status:    "Pending",
@@ -56,7 +56,7 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 			ctx.EngineLedger.RecordCommit(ledger.Commit{
 				Hash:      tempID,
 				Image:     image,
-				Author:    ctx.NodeName,
+				Author:    ctx.GetNodeName(),
 				Timestamp: time.Now().Format(time.RFC3339),
 				Direction: "Exported",
 				Status:    "Crashed",
@@ -69,7 +69,7 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 		ctx.EngineLedger.RecordCommit(ledger.Commit{
 			Hash:      tempID,
 			Image:     image,
-			Author:    ctx.NodeName,
+			Author:    ctx.GetNodeName(),
 			Timestamp: time.Now().Format(time.RFC3339),
 			Direction: "Exported",
 			Status:    "Failed",
@@ -90,7 +90,7 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 		ctx.EngineLedger.RecordCommit(ledger.Commit{
 			Hash:      tempID,
 			Image:     image,
-			Author:    ctx.NodeName,
+			Author:    ctx.GetNodeName(),
 			Timestamp: time.Now().Format(time.RFC3339),
 			Direction: "Exported",
 			Status:    "Failed",

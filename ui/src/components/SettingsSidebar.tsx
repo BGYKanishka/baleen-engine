@@ -7,11 +7,12 @@ interface SettingsSidebarProps {
   nodeName: string;
   customName: string;
   onNameChange: (name: string) => void;
+	setNodeName: (name: string) => void;
   port: number | null;
   token: string;
 }
 
-export default function SettingsSidebar({ isOpen, onClose, nodeName, customName, onNameChange, port, token }: SettingsSidebarProps) {
+export default function SettingsSidebar({ isOpen, onClose, nodeName, customName, onNameChange, setNodeName, port, token }: SettingsSidebarProps) {
   const ddClient = createDockerDesktopClient();
   const sidebarRef = useRef<HTMLDivElement>(null);
 
@@ -171,6 +172,9 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
         setLimitBandwidth(data.transfer.max_bandwidth > 0);
         setMaxBandwidth(data.transfer.max_bandwidth > 0 ? data.transfer.max_bandwidth : 50);
         onNameChange(''); // Clear custom name in app state
+        if (data.node_name) {
+          setNodeName(data.node_name);
+        }
         setDraftName('');
       }
     } catch {

@@ -38,13 +38,13 @@ func RecordAndPush(ctx EngineContext, exportedPath, image, arch, targetIP string
 	ctx.EngineLedger.RecordCommit(ledger.Commit{
 		Hash:      hash,
 		Image:     image,
-		Author:    ctx.NodeName,
+		Author:    ctx.GetNodeName(),
 		Timestamp: time.Now().Format(time.RFC3339),
 		Direction: "Exporting",
 		Status:    "Pending",
 	})
 
-	pushErr := transfer.PushImage(targetIP, targetPort, fingerprint, exportedPath, image, hash, ctx.NodeName, arch, ctx.TLSConfig)
+	pushErr := transfer.PushImage(targetIP, targetPort, fingerprint, exportedPath, image, hash, ctx.GetNodeName(), arch, ctx.TLSConfig)
 
 	if pushErr != nil {
 		slog.Error("push failed", "error", pushErr)
@@ -52,7 +52,7 @@ func RecordAndPush(ctx EngineContext, exportedPath, image, arch, targetIP string
 	commit := ledger.Commit{
 		Hash:      hash,
 		Image:     image,
-		Author:    ctx.NodeName,
+		Author:    ctx.GetNodeName(),
 		Timestamp: time.Now().Format(time.RFC3339),
 		Direction: "Exported",
 		Status:    transfer.ParseErrorToStatus(pushErr),
