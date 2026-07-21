@@ -42,18 +42,11 @@ func buildSkipSet(mainLayers []string, allDigests []string, missingDigests []str
 
 // parses the manifest from a tarball and returns the physical
 func readMainLayers(tarPath string) ([]string, error) {
-	manifests, err := readManifest(tarPath)
+	item, err := GetMainManifestItem(tarPath)
 	if err != nil {
 		return nil, err
 	}
-
-	var mainLayers []string
-	for _, m := range manifests {
-		if len(m.Layers) > len(mainLayers) {
-			mainLayers = m.Layers
-		}
-	}
-	return mainLayers, nil
+	return item.Layers, nil
 }
 
 // streams inPath into a new tar at outPath, omitting entries in skipFiles

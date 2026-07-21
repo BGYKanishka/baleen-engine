@@ -10,10 +10,6 @@ import (
 
 func History(ctx cli.EngineContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
 
 		history, err := ctx.EngineLedger.GetHistory()
 		if err != nil {

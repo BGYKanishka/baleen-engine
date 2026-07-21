@@ -9,10 +9,6 @@ import (
 
 func Pending(ctx cli.EngineContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
 
 		req, ok := ctx.PendingApproval.Load()
 		if !ok {
@@ -26,19 +22,11 @@ func Pending(ctx cli.EngineContext) http.HandlerFunc {
 }
 func Approve(ctx cli.EngineContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
 		sendDecision(ctx, w, true)
 	}
 }
 func Reject(ctx cli.EngineContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
 		sendDecision(ctx, w, false)
 	}
 }

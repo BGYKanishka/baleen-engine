@@ -9,16 +9,10 @@ import (
 	"github.com/BGYKanishka/baleen-engine/internal/cli"
 	"github.com/BGYKanishka/baleen-engine/internal/docker"
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
-	"github.com/BGYKanishka/baleen-engine/internal/network"
-	"github.com/BGYKanishka/baleen-engine/internal/transfer"
 )
 
 func Dispatch(ctx cli.EngineContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
 
 		var payload struct {
 			Image        string `json:"image"`
@@ -50,7 +44,7 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 	ctx.EngineLedger.RecordCommit(ledger.Commit{
 		Hash:      tempID,
 		Image:     image,
-		Author:    ctx.NodeName,
+		Author:    ctx.GetNodeName(),
 		Timestamp: time.Now().Format(time.RFC3339),
 		Direction: "Exporting",
 		Status:    "Pending",
@@ -62,7 +56,7 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 			ctx.EngineLedger.RecordCommit(ledger.Commit{
 				Hash:      tempID,
 				Image:     image,
-				Author:    ctx.NodeName,
+				Author:    ctx.GetNodeName(),
 				Timestamp: time.Now().Format(time.RFC3339),
 				Direction: "Exported",
 				Status:    "Crashed",
@@ -70,20 +64,18 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 		}
 	}()
 
-	targetIP, port, fingerprint, resolveErr := network.ResolveTargetAddress(ctx.PeerRegistry, peer)
+	targetIP, port, fingerprint, targetArch, resolveErr := cli.ResolveAndDetect(ctx, peer)
 	if resolveErr != nil {
 		ctx.EngineLedger.RecordCommit(ledger.Commit{
 			Hash:      tempID,
 			Image:     image,
-			Author:    ctx.NodeName,
+			Author:    ctx.GetNodeName(),
 			Timestamp: time.Now().Format(time.RFC3339),
 			Direction: "Exported",
 			Status:    "Failed",
 		})
 		return
 	}
-
-	targetArch := network.DetectRemoteArch(targetIP, port)
 
 	cfg := docker.PreflightConfig{
 		ImageName:      image,
@@ -98,7 +90,7 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 		ctx.EngineLedger.RecordCommit(ledger.Commit{
 			Hash:      tempID,
 			Image:     image,
-			Author:    ctx.NodeName,
+			Author:    ctx.GetNodeName(),
 			Timestamp: time.Now().Format(time.RFC3339),
 			Direction: "Exported",
 			Status:    "Failed",
@@ -106,29 +98,5 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 		return
 	}
 
-	hash, hashErr := ledger.GenerateHash(exportedFilePath)
-	if hashErr != nil {
-		hash = tempID
-	} else {
-		ctx.EngineLedger.DeleteCommit(tempID)
-		ctx.EngineLedger.RecordCommit(ledger.Commit{
-			Hash:      hash,
-			Image:     image,
-			Author:    ctx.NodeName,
-			Timestamp: time.Now().Format(time.RFC3339),
-			Direction: "Exporting",
-			Status:    "Pending",
-		})
-	}
-
-	pushErr := transfer.PushImage(targetIP, port, fingerprint, exportedFilePath, image, hash, ctx.NodeName, arch, ctx.TLSConfig)
-
-	ctx.EngineLedger.RecordCommit(ledger.Commit{
-		Hash:      hash,
-		Image:     image,
-		Author:    ctx.NodeName,
-		Timestamp: time.Now().Format(time.RFC3339),
-		Direction: "Exported",
-		Status:    transfer.ParseErrorToStatus(pushErr),
-	})
+	cli.RecordAndPush(ctx, exportedFilePath, image, arch, targetIP, port, fingerprint, tempID)
 }

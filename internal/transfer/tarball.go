@@ -9,6 +9,12 @@ import (
 )
 
 func getLayersFromTarball(tarPath string) ([]string, error) {
+	item, err := GetMainManifestItem(tarPath)
+	if err != nil {
+		return nil, err
+	}
+	configName := item.Config
+
 	file, err := os.Open(tarPath)
 	if err != nil {
 		return nil, err
@@ -16,45 +22,6 @@ func getLayersFromTarball(tarPath string) ([]string, error) {
 	defer file.Close()
 
 	tr := tar.NewReader(file)
-	var manifests []struct {
-		Config string   `json:"Config"`
-		Layers []string `json:"Layers"`
-	}
-	var configName string
-
-	// Find manifest.json and pick the config for the image with the most layers
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		if hdr.Name == "manifest.json" {
-			if err := json.NewDecoder(tr).Decode(&manifests); err != nil {
-				return nil, err
-			}
-			maxLayers := 0
-			for _, m := range manifests {
-				if len(m.Layers) > maxLayers {
-					maxLayers = len(m.Layers)
-					configName = m.Config
-				}
-			}
-			break
-		}
-	}
-
-	if configName == "" {
-		return nil, fmt.Errorf("could not find main config in manifest")
-	}
-
-	// Rewind and parse the config JSON to get the actual layer digests
-	if _, err := file.Seek(0, 0); err != nil {
-		return nil, err
-	}
-	tr = tar.NewReader(file)
 
 	for {
 		hdr, err := tr.Next()

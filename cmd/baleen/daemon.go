@@ -44,7 +44,11 @@ func runDaemon(args []string) {
 	daemonFlags.StringVar(&finalName, "name", "auto", "Name of the Baleen Node")
 	daemonFlags.Parse(args)
 	if finalName == "auto" {
-		finalName = config.GenerateNodeName()
+		if saved := config.LoadNodeName(); saved != "" {
+			finalName = saved
+		} else {
+			finalName = config.GenerateNodeName()
+		}
 	}
 	targetPort := 0
 
@@ -119,20 +123,30 @@ func runDaemon(args []string) {
 		}
 	}()
 
-	var wg sync.WaitGroup
-	wg.Add(4)
+	// Load persisted network feature flags.
+	netSettings := config.LoadNetworkSettings()
 
-	// Start P2P network (mDNS broadcaster, discovery, health checker).
-	go network.StartBroadcaster(ctx, &wg, finalName, p2pPort, nodeFingerprint)
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Build the peer registry and seed any static peers from the environment.
 	peerRegistry := network.NewPeerRegistry()
 	network.LoadStaticPeers(peerRegistry)
-	go network.DiscoverPeers(ctx, &wg, finalName, peerRegistry)
+
+	// manages the mDNS discovery and broadcast goroutines.
+	netController := network.NewNetworkController(
+		ctx, finalName, p2pPort, nodeFingerprint, peerRegistry,
+		netSettings.MDNSDiscovery, netSettings.BroadcastPresence,
+	)
+
+	// Health checker and metadata server are always active.
 	go peerRegistry.StartHealthChecker(ctx, &wg)
-	go network.StartMetadataServer(p2pPort + config.MetadataPortOffset)
+	go network.StartMetadataServer(p2pPort+config.MetadataPortOffset, netController.BroadcastEnabledFlag())
+
 	approvalChan := make(chan transfer.ApprovalRequest)
 	downloadedChan := make(chan transfer.DownloadResult)
 	activeTransfers := &atomic.Int32{}
-	go transfer.StartReceiver(ctx, &wg, listener, incomingDir, approvalChan, downloadedChan, engineLedger, activeTransfers)
+	go transfer.StartReceiver(ctx, &wg, listener, incomingDir, approvalChan, downloadedChan, engineLedger, activeTransfers, netController.BroadcastEnabledFlag())
 
 	// Auto-load received images into Docker.
 	go func() {
@@ -148,17 +162,18 @@ func runDaemon(args []string) {
 	}()
 
 	cliContext := cli.EngineContext{
-		NodeName:        finalName,
-		TempDir:         tempDir,
-		ActualPort:      p2pPort,
-		PeerRegistry:    peerRegistry,
-		EngineLedger:    engineLedger,
-		TLSConfig:       tlsConfig,
-		ApprovalChan:    approvalChan,
-		PendingApproval: &cli.PendingApprovalStore{},
-		DownloadedChan:  downloadedChan,
-		DockerManager:   dockerManager,
-		ActiveTransfers: activeTransfers,
+		GetNodeName:       netController.GetNodeName,
+		TempDir:           tempDir,
+		ActualPort:        p2pPort,
+		PeerRegistry:      peerRegistry,
+		EngineLedger:      engineLedger,
+		TLSConfig:         tlsConfig,
+		ApprovalChan:      approvalChan,
+		PendingApproval:   &cli.PendingApprovalStore{},
+		DownloadedChan:    downloadedChan,
+		DockerManager:     dockerManager,
+		ActiveTransfers:   activeTransfers,
+		NetworkController: netController,
 	}
 
 	// StartDaemonServer binds its own random HTTP listener.

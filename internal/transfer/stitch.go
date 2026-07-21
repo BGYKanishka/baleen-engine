@@ -34,17 +34,12 @@ func StitchTarball(prunedPath string, reconstructedPath string, layerCacheDir st
 
 // reads the manifest from a tarball and returns a mapping
 func buildDigestToPathMap(tarPath string, allDigests []string) (map[string]string, error) {
-	manifests, err := readManifest(tarPath)
+	item, err := GetMainManifestItem(tarPath)
 	if err != nil {
 		return nil, err
 	}
 
-	var mainLayers []string
-	for _, m := range manifests {
-		if len(m.Layers) > len(mainLayers) {
-			mainLayers = m.Layers
-		}
-	}
+	mainLayers := item.Layers
 
 	pathMap := make(map[string]string, len(allDigests))
 	for i, physicalPath := range mainLayers {

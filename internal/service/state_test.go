@@ -182,3 +182,14 @@ func TestReleaseLock(t *testing.T) {
 		t.Error("lock file should not exist after ReleaseLock")
 	}
 }
+
+func TestReadState_InvalidJSON(t *testing.T) {
+	baleenDir := overrideHome(t)
+	os.WriteFile(filepath.Join(baleenDir, "service.json"), []byte("{invalid json}"), 0644)
+
+	_, err := ReadState()
+	if err == nil {
+		t.Fatal("expected error reading invalid JSON, got nil")
+	}
+}
+

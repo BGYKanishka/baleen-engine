@@ -39,28 +39,31 @@ func StartDaemonServer(ctx cli.EngineContext, token string, stopCh chan<- struct
 	mux := http.NewServeMux()
 
 	// Wire up all route handlers, injecting shared dependencies
-	mux.HandleFunc("/api/health", withHeartbeat(handlers.Health()))
-	mux.HandleFunc("/api/peers", withHeartbeat(handlers.Peers(ctx)))
-	mux.HandleFunc("/api/peers/", withHeartbeat(handlers.Peers(ctx)))
-	mux.HandleFunc("/api/images", withHeartbeat(handlers.Images()))
-	mux.HandleFunc("/api/ledger", withHeartbeat(handlers.History(ctx)))
-	mux.HandleFunc("/api/push", withHeartbeat(handlers.Dispatch(ctx)))
-	mux.HandleFunc("/api/stream", withHeartbeat(handlers.Stream()))
-	mux.HandleFunc("/api/pending", withHeartbeat(handlers.Pending(ctx)))
-	mux.HandleFunc("/api/approve", withHeartbeat(handlers.Approve(ctx)))
-	mux.HandleFunc("/api/reject", withHeartbeat(handlers.Reject(ctx)))
-	mux.HandleFunc("/api/gc", withHeartbeat(handlers.GC(ctx)))
-	mux.HandleFunc("/api/logs", withHeartbeat(handlers.Logs()))
-	mux.HandleFunc("/api/transfer/pause", withHeartbeat(handlers.Pause()))
-	mux.HandleFunc("/api/transfer/resume", withHeartbeat(handlers.Resume()))
-	mux.HandleFunc("/api/transfer/cancel", withHeartbeat(handlers.Cancel()))
+	mux.HandleFunc("GET /api/health", withHeartbeat(handlers.Health()))
+	mux.HandleFunc("GET /api/peers", withHeartbeat(handlers.Peers(ctx)))
+	mux.HandleFunc("POST /api/peers", withHeartbeat(handlers.Peers(ctx)))
+	mux.HandleFunc("DELETE /api/peers/", withHeartbeat(handlers.Peers(ctx)))
+	mux.HandleFunc("GET /api/ledger", withHeartbeat(handlers.History(ctx)))
+	mux.HandleFunc("POST /api/push", withHeartbeat(handlers.Dispatch(ctx)))
+	mux.HandleFunc("GET /api/stream", withHeartbeat(handlers.Stream()))
+	mux.HandleFunc("GET /api/pending", withHeartbeat(handlers.Pending(ctx)))
+	mux.HandleFunc("POST /api/approve", withHeartbeat(handlers.Approve(ctx)))
+	mux.HandleFunc("POST /api/reject", withHeartbeat(handlers.Reject(ctx)))
+	mux.HandleFunc("POST /api/gc", withHeartbeat(handlers.GC(ctx)))
+	mux.HandleFunc("GET /api/logs", withHeartbeat(handlers.Logs()))
+	mux.HandleFunc("POST /api/transfer/pause", withHeartbeat(handlers.Pause()))
+	mux.HandleFunc("POST /api/transfer/resume", withHeartbeat(handlers.Resume()))
+	mux.HandleFunc("POST /api/transfer/cancel", withHeartbeat(handlers.Cancel()))
+	mux.HandleFunc("GET /api/node/name", withHeartbeat(handlers.NodeName(ctx)))
+	mux.HandleFunc("POST /api/node/name", withHeartbeat(handlers.NodeName(ctx)))
+	mux.HandleFunc("GET /api/network/settings", withHeartbeat(handlers.NetworkSettings(ctx)))
+	mux.HandleFunc("POST /api/network/settings", withHeartbeat(handlers.NetworkSettings(ctx)))
+	mux.HandleFunc("GET /api/transfer/settings", withHeartbeat(handlers.TransferSettings()))
+	mux.HandleFunc("POST /api/transfer/settings", withHeartbeat(handlers.TransferSettings()))
+	mux.HandleFunc("POST /api/settings/reset", withHeartbeat(handlers.ResetSettings(ctx)))
 
 	// Stop endpoint: UI/CLI call this when the user clicks the Stop button.
-	mux.HandleFunc("/api/stop", withHeartbeat(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+	mux.HandleFunc("POST /api/stop", withHeartbeat(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"stopping"}`))
 		// Flush first, then signal main.

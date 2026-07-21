@@ -28,7 +28,7 @@ type DownloadResult struct {
 var isHex = regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString
 
 // runs a background TCP server to listen for incoming files
-func StartReceiver(ctx context.Context, wg *sync.WaitGroup, listener net.Listener, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan DownloadResult, engineLedger *ledger.Ledger, activeTransfers *atomic.Int32) {
+func StartReceiver(ctx context.Context, wg *sync.WaitGroup, listener net.Listener, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan DownloadResult, engineLedger *ledger.Ledger, activeTransfers *atomic.Int32, accepting *atomic.Bool) {
 	defer wg.Done()
 
 	for {
@@ -42,8 +42,23 @@ func StartReceiver(ctx context.Context, wg *sync.WaitGroup, listener net.Listene
 				continue
 			}
 		}
+
+		// If broadcast presence is disabled, refuse the transfer immediately.
+		if accepting != nil && !accepting.Load() {
+			go rejectConnection(conn)
+			continue
+		}
+
 		go handleIncomingTransfer(conn, incomingDir, approvalChan, downloadedChan, engineLedger, activeTransfers)
 	}
+}
+
+// sends a clean rejection response and closes the connection.
+func rejectConnection(conn net.Conn) {
+	defer conn.Close()
+	conn.SetWriteDeadline(time.Now().Add(3 * time.Second))
+	_ = json.NewEncoder(conn).Encode(TransferResponse{Approved: false})
+	slog.Info("rejected incoming transfer: broadcast presence is disabled")
 }
 
 // reads a full Docker tarball and streams
@@ -100,8 +115,7 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 		return
 	}
 
-	// Publish "waiting for approval" before blocking on the channel.
-	PublishStatus(req.ImageName, req.Author, "pull", "waiting for approval")
+	// We'll publish status inside receiveAndApprove based on whether it auto-approves or blocks
 
 	ok := receiveAndApprove(req, encoder, approvalChan)
 	if !ok {
@@ -160,6 +174,16 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 
 // asks for user approval for the decoded TransferRequest
 func receiveAndApprove(req TransferRequest, encoder *json.Encoder, approvalChan chan ApprovalRequest) bool {
+	// Check if auto-approve is enabled
+	settings := config.LoadTransferSettings()
+	if settings.AutoApprove {
+		slog.Info("auto-approving transfer based on settings", "image", req.ImageName, "author", req.Author)
+		PublishStatus(req.ImageName, req.Author, "pull", "auto-approved, waiting for sender")
+		return true
+	}
+
+	PublishStatus(req.ImageName, req.Author, "pull", "waiting for approval")
+
 	// Buffered (size 1) so CancelApproval can inject a rejection.
 	respChan := make(chan bool, 1)
 
@@ -216,7 +240,14 @@ func downloadPayload(decoder *json.Decoder, conn net.Conn, incomingDir string, i
 	pw := newProgressWriter(file, streamHeader.PrunedSize, image, peer, "pull")
 	pw.ControlConn = conn
 	defer pw.Cleanup()
-	bytesReceived, err := io.Copy(pw, conn)
+
+	settings := config.LoadTransferSettings()
+	var reader io.Reader = conn
+	if settings.MaxBandwidth > 0 {
+		reader = NewThrottledReader(conn, settings.MaxBandwidth*1024*1024)
+	}
+
+	bytesReceived, err := io.Copy(pw, reader)
 	file.Close()
 	if err != nil {
 		os.Remove(targetPath)

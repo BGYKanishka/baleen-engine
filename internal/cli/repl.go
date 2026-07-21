@@ -20,17 +20,18 @@ import (
 
 // EngineContext holds all the dependencies the CLI needs to execute commands
 type EngineContext struct {
-	NodeName        string
-	TempDir         string
-	ActualPort      int
-	PeerRegistry    *network.PeerRegistry
-	EngineLedger    *ledger.Ledger
-	TLSConfig       *tls.Config
-	ApprovalChan    chan transfer.ApprovalRequest
-	PendingApproval *PendingApprovalStore
-	DownloadedChan  chan transfer.DownloadResult
-	DockerManager   *docker.Manager
-	ActiveTransfers *atomic.Int32
+	GetNodeName       func() string
+	TempDir           string
+	ActualPort        int
+	PeerRegistry      *network.PeerRegistry
+	EngineLedger      *ledger.Ledger
+	TLSConfig         *tls.Config
+	ApprovalChan      chan transfer.ApprovalRequest
+	PendingApproval   *PendingApprovalStore
+	DownloadedChan    chan transfer.DownloadResult
+	DockerManager     *docker.Manager
+	ActiveTransfers   *atomic.Int32
+	NetworkController *network.NetworkController
 }
 
 type PendingApprovalStore struct {

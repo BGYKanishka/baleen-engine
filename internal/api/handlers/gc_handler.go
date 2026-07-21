@@ -15,10 +15,6 @@ import (
 // GC handles garbage collection requests to clean up the ledger and optionally remove physical tar files.
 func GC(ctx cli.EngineContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
 
 		var payload struct {
 			Mode        string `json:"mode"`

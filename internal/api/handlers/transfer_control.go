@@ -14,10 +14,6 @@ type controlPayload struct {
 
 func handleControl(action string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
 
 		var payload controlPayload
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
