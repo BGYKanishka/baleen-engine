@@ -57,27 +57,15 @@ export default function App() {
     }
   };
 
-  // ── Checking / connecting ─────────────────────────────────────────────────
-  if (status === 'checking') {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center gap-3 bg-transparent text-gray-600 dark:text-gray-400">
-        <svg className="animate-spin h-6 w-6 text-blue-500" viewBox="0 0 24 24" fill="none">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-        </svg>
-        <span className="text-sm font-medium">Checking Baleen service…</span>
-      </div>
-    );
-  }
-
-  // Service is stopped — show a start button and instructions.
-  if (status === 'stopped') {
+  // ── Checking / stopped ─────────────────────────────────────────────────
+  if (status === 'checking' || status === 'stopped') {
+    const isChecking = status === 'checking';
     return (
       <div className="flex flex-col h-screen items-center justify-center gap-6 bg-transparent">
         {/* Icon */}
         <NetworkSphere className="w-48 h-48 opacity-80" />
 
-        <div className="text-center space-y-1">
+        <div className={`text-center space-y-1 ${isChecking ? 'invisible' : ''}`}>
           <div className="text-gray-700 dark:text-gray-300 font-semibold text-lg">Baleen is not running</div>
           <p className="text-gray-400 dark:text-gray-500 text-sm max-w-xs text-center">
             The background service is stopped. Click Start to begin sharing Docker images on your network.
@@ -87,7 +75,8 @@ export default function App() {
         <button
           id="start-baleen-btn"
           onClick={startDaemon}
-          className="bg-blue-600 hover:bg-blue-700 active:scale-95 text-white px-8 py-3 rounded-xl font-semibold text-base shadow-lg transition-all duration-150"
+          disabled={isChecking}
+          className={`bg-blue-600 hover:bg-blue-700 active:scale-95 text-white px-8 py-3 rounded-xl font-semibold text-base shadow-lg transition-all duration-150 ${isChecking ? 'invisible' : ''}`}
         >
           Start Baleen
         </button>

@@ -1,14 +1,10 @@
 # Baleen Engine 🐳
 
-![Status](https://img.shields.io/badge/Status-Ongoing_Development-orange)
-
 Baleen Engine is a high-speed, local-first, peer-to-peer Docker image sharing engine. It completely bypasses cloud registries and internet bottlenecks, allowing you to synchronize Docker images directly between machines on your local network.
-
-> **🚧 Project Status:** This project is currently in **active development (ongoing)**. The core engine is functional, but features, architecture, and APIs are subject to change as development continues. 
 
 ## 🚀 Key Features
 
-*   **Peer-to-Peer Transfers:** Direct, high-speed TCP socket transfers over ephemeral TLS — no internet connection or cloud registry required.
+*   **Peer-to-Peer Transfers:** Direct, high-speed TCP socket transfers over persistent TLS — no internet connection or cloud registry required.
 *   **Autonomous Discovery:** Built-in `zeroconf` seamlessly handles machine discovery on your local network.
 *   **Ledger:** Uses a historical ledger powered by `bbolt` to track image synchronization history and cache layers.
 *   **Delta Transfer Engine:** Smart layer pruning and stitching. Only the layers that the peer is missing are transferred.
@@ -19,8 +15,8 @@ Baleen Engine is a high-speed, local-first, peer-to-peer Docker image sharing en
 ## 🔒 Security & Trust Model
 
 Baleen Engine is designed for local-first peer-to-peer sharing. 
-- **Encryption:** All P2P transfers are encrypted using ephemeral RSA-2048 self-signed TLS certificates.
-- **Trust On First Use (TOFU):** Because there is no central certificate authority, the incoming TLS connections are unauthenticated at the network layer. 
+- **Encryption:** All P2P transfers are encrypted over TLS (implicitly supporting TLS 1.3 with ECDHE) using persistent RSA-2048 self-signed certificates. Data integrity and certificate fingerprints are verified using SHA-256.
+- **Dynamic LAN Trust:** Because there is no central certificate authority, Baleen dynamically relies on certificate fingerprints broadcasted by peers over the unauthenticated mDNS protocol.
 - **Manual Approval Required:** To prevent unauthorized images from being pushed to your machine, **all incoming transfers require explicit user approval** via the CLI or UI before any data is processed or loaded into Docker. *(Note: Baleen trusts the local network — treat it the way you'd treat an open SMB share. Anyone on your Wi-Fi can prompt an approval request).*
 - **API Security:** The local management API intentionally binds exclusively to `127.0.0.1`, ensuring that other machines on your LAN cannot issue administrative commands to your daemon.
 
@@ -30,6 +26,7 @@ Baleen Engine is designed for local-first peer-to-peer sharing.
 *   **Container Integration:** Docker Engine SDK
 *   **Storage / Ledger:** `bbolt`
 *   **Network Discovery:** `zeroconf` (mDNS/DNS-SD)
+*   **Interactive CLI:** `readline`
 *   **UI / Extension:** React, TypeScript, Vite, Tailwind CSS
 
 ## ⚙️ Architecture Overview
@@ -112,7 +109,7 @@ graph TD
 - **`cli`**: Interactive REPL loop for pushing images, viewing peers, checking history, and pruning. Connects to the running daemon via HTTP when a background service is already active.
 - **`api`**: HTTP daemon server providing endpoints for the UI to monitor transfers, peers, images, and live logs (SSE).
 - **`config`**: Core node setup, application paths, and generated node names.
-- **`network`**: Peer discovery via `zeroconf` mDNS and secure connections via ephemeral RSA-2048 self-signed TLS certificates.
+- **`network`**: Peer discovery via `zeroconf` mDNS and secure connections via persistent RSA-2048 self-signed TLS certificates.
 - **`transfer`**: Delta stream engine that negotiates layer diffs, sending only missing layers and verifying integrity via SHA-256.
 - **`ledger`**: `bbolt` powered key-value store for history and local layer caching.
 - **`docker`**: Integration with Docker SDK to inspect, export, buildx (cross-compile), and load images.

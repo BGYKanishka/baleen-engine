@@ -31,12 +31,23 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
   const [limitBandwidth, setLimitBandwidth] = useState(false);
   const [maxBandwidth, setMaxBandwidth] = useState(50);
   const [transferLoaded, setTransferLoaded] = useState(false);
+  const [nodeIp, setNodeIp] = useState('');
 
   const displayName = customName || nodeName || '—';
 
   // Fetch current network settings whenever the sidebar opens (or port becomes available)
   useEffect(() => {
     if (!isOpen || !port) return;
+
+    fetch(`http://127.0.0.1:${port}/api/node/name`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ip) setNodeIp(data.ip);
+      })
+      .catch(() => {});
+
     fetch(`http://127.0.0.1:${port}/api/network/settings`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -302,6 +313,7 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
                 </div>
               )}
             </div>
+            <InfoRow label="IP Address" value={nodeIp || '—'} />
             <InfoRow label="API Port" value={port ? String(port) : '—'} />
             <InfoRow label="Protocol" value="Baleen P2P v1" />
           </Section>

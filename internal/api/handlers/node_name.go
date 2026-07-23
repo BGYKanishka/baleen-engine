@@ -2,12 +2,24 @@ package handlers
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"strings"
 
 	"github.com/BGYKanishka/baleen-engine/internal/cli"
 	"github.com/BGYKanishka/baleen-engine/internal/config"
 )
+
+// gets the preferred outbound ip of this machine
+func GetOutboundIP() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return "127.0.0.1"
+	}
+	defer conn.Close()
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	return localAddr.IP.String()
+}
 
 func NodeName(ctx cli.EngineContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -16,7 +28,10 @@ func NodeName(ctx cli.EngineContext) http.HandlerFunc {
 		switch r.Method {
 
 		case http.MethodGet:
-			json.NewEncoder(w).Encode(map[string]string{"name": ctx.GetNodeName()})
+			json.NewEncoder(w).Encode(map[string]string{
+				"name": ctx.GetNodeName(),
+				"ip":   GetOutboundIP(),
+			})
 
 		case http.MethodPost:
 			var req struct {
