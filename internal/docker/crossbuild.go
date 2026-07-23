@@ -1,9 +1,9 @@
 package docker
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
-	"os"
 	"os/exec"
 )
 
@@ -12,12 +12,16 @@ func (m *Manager) silentlyResolveArchitecture(imageName string, targetPlatform s
 
 	slog.Info("architecture mismatch detected, cross-compiling", "image", imageName, "target", targetPlatform)
 
-	cmd := exec.Command("docker", "buildx", "build", "--platform", targetPlatform, "-t", tempExportTag, "--load", buildContext)
+	// Added --progress=quiet to hide noisy BuildKit output
+	cmd := exec.Command("docker", "buildx", "build", "--progress=quiet", "--platform", targetPlatform, "-t", tempExportTag, "--load", buildContext)
 
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stdout
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
 
 	if err := cmd.Run(); err != nil {
+		// Only show the Docker output if it fails!
+		slog.Error("cross-compilation failed", "details", out.String())
 		return "", fmt.Errorf("autonomous cross-compilation failed: %w", err)
 	}
 
