@@ -63,7 +63,7 @@ export default function App() {
     return (
       <div className="flex flex-col h-screen items-center justify-center gap-6 bg-transparent">
         {/* Icon */}
-        <NetworkSphere className="w-48 h-48 opacity-80" />
+        <NetworkSphere className="w-64 h-64 opacity-80" />
 
         <div className={`text-center space-y-1 ${isChecking ? 'invisible' : ''}`}>
           <div className="text-gray-700 dark:text-gray-300 font-semibold text-lg">Baleen is not running</div>

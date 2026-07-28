@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -43,6 +45,12 @@ func runDaemon(args []string) {
 	var finalName string
 	daemonFlags.StringVar(&finalName, "name", "auto", "Name of the Baleen Node")
 	daemonFlags.Parse(args)
+	if daemonToken == "" {
+		randomBytes := make([]byte, 16)
+		if _, err := rand.Read(randomBytes); err == nil {
+			daemonToken = hex.EncodeToString(randomBytes)
+		}
+	}
 	if finalName == "auto" {
 		if saved := config.LoadNodeName(); saved != "" {
 			finalName = saved
@@ -214,6 +222,13 @@ func runLauncher(args []string) {
 	var daemonName string
 	daemonFlags.StringVar(&daemonName, "name", "auto", "Name of the Baleen Node")
 	daemonFlags.Parse(args)
+
+	if daemonToken == "" {
+		randomBytes := make([]byte, 16)
+		if _, err := rand.Read(randomBytes); err == nil {
+			daemonToken = hex.EncodeToString(randomBytes)
+		}
+	}
 
 	// Check if a background service is already running. If so, return its connection info.
 	if existing, err := service.ReadState(); err == nil && service.IsAlive(existing) {

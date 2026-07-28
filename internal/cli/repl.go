@@ -68,7 +68,8 @@ func Start(ctx EngineContext) {
 		EOFPrompt:       "exit",
 	})
 	if err != nil {
-		panic(err)
+		fmt.Printf("Failed to initialize REPL: %v\n", err)
+		os.Exit(1)
 	}
 	defer rl.Close()
 	logger.InitLogger(false, rl.Stdout())
