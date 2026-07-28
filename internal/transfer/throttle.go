@@ -31,8 +31,14 @@ func NewThrottledReader(r io.Reader, bytesPerSec int) *ThrottledReader {
 	}
 }
 
-// Read reads from the underlying reader and blocks until the rate limiter allows it.
 func (t *ThrottledReader) Read(p []byte) (int, error) {
+	if t.limiter != nil {
+		burst := t.limiter.Burst()
+		if len(p) > burst {
+			p = p[:burst]
+		}
+	}
+
 	n, err := t.r.Read(p)
 	if n > 0 && t.limiter != nil {
 		// WaitN blocks until n tokens are available or the context is cancelled.
