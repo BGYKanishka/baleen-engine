@@ -1,0 +1,255 @@
+<svg width="800" height="420" viewBox="0 0 800 420" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Polish Effects -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.5" />
+    </filter>
+    <linearGradient id="machine-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1E293B" />
+      <stop offset="100%" stop-color="#0F172A" />
+    </linearGradient>
+    <style>
+      @keyframes pulse {
+        0% { r: 0; opacity: 1; }
+        100% { r: 150; opacity: 0; }
+      }
+      @keyframes radar-trigger {
+        0%, 5% { opacity: 0; }
+        6%, 22% { opacity: 1; }
+        23%, 100% { opacity: 0; }
+      }
+      @keyframes path-dash {
+        0%, 15% { stroke-dashoffset: 200; opacity: 0; }
+        16%, 95% { stroke-dashoffset: 0; opacity: 1; }
+        96%, 100% { opacity: 0; }
+      }
+      @keyframes lock-pop {
+        0%, 16% { transform: scale(0); opacity: 0; }
+        18%, 95% { transform: scale(1); opacity: 1; }
+        96%, 100% { transform: scale(0); opacity: 0; }
+      }
+      @keyframes envelope-move {
+        0%, 25% { transform: translate(300px, 190px); opacity: 0; }
+        26% { opacity: 1; transform: translate(300px, 190px); }
+        33% { transform: translate(460px, 190px); opacity: 1; }
+        34%, 100% { opacity: 0; transform: translate(460px, 190px); }
+      }
+      @keyframes status-needs {
+        0%, 68.9% { opacity: 1; }
+        69%, 95.9% { opacity: 0; }
+        96%, 100% { opacity: 1; }
+      }
+      @keyframes status-ask {
+        0%, 33.9% { opacity: 0; transform: scale(0.9); }
+        34%, 41.4% { opacity: 1; transform: scale(1); animation-timing-function: ease-in-out; }
+        41.5%, 42.5% { opacity: 1; transform: scale(0.92); animation-timing-function: ease-in-out; }
+        42.6%, 44% { opacity: 1; transform: scale(1); }
+        44.1%, 100% { opacity: 0; transform: scale(1); }
+      }
+      @keyframes cursor-move {
+        0%, 37% { opacity: 0; transform: translate(650px, 250px); }
+        38% { opacity: 1; transform: translate(650px, 250px); animation-timing-function: ease-out; }
+        40.5% { opacity: 1; transform: translate(600px, 180px); }
+        41.4% { opacity: 1; transform: translate(600px, 180px) scale(1); }
+        41.5%, 42.5% { opacity: 1; transform: translate(600px, 180px) scale(0.85); animation-timing-function: ease-in-out; }
+        42.6% { opacity: 1; transform: translate(600px, 180px) scale(1); animation-timing-function: ease-in; }
+        44.5% { opacity: 1; transform: translate(650px, 250px); }
+        45.5%, 100% { opacity: 0; transform: translate(650px, 250px); }
+      }
+      @keyframes status-acc {
+        0%, 44% { opacity: 0; transform: scale(0.9); }
+        44.1%, 52% { opacity: 1; transform: scale(1); }
+        52.1%, 100% { opacity: 0; transform: scale(1); }
+      }
+      @keyframes status-done {
+        0%, 68.9% { opacity: 0; }
+        69%, 95.9% { opacity: 1; }
+        96%, 100% { opacity: 0; }
+      }
+      @keyframes move-app {
+        0%, 53% { transform: translate(120px, 240px); opacity: 0; }
+        54% { opacity: 1; transform: translate(120px, 240px); }
+        66% { transform: translate(520px, 240px); opacity: 1; }
+        67%, 100% { opacity: 0; transform: translate(520px, 240px); }
+      }
+      @keyframes move-config {
+        0%, 55% { transform: translate(120px, 200px); opacity: 0; }
+        56% { opacity: 1; transform: translate(120px, 200px); }
+        68% { transform: translate(520px, 200px); opacity: 1; }
+        69%, 100% { opacity: 0; transform: translate(520px, 200px); }
+      }
+      @keyframes appear-app {
+        0%, 66% { opacity: 0; }
+        67%, 95% { opacity: 1; }
+        96%, 100% { opacity: 0; }
+      }
+      @keyframes appear-config {
+        0%, 68% { opacity: 0; }
+        69%, 95% { opacity: 1; }
+        96%, 100% { opacity: 0; }
+      }
+      @keyframes check-pop {
+        0%, 73% { opacity: 0; transform: scale(0); }
+        75%, 95% { opacity: 1; transform: scale(1); }
+        96%, 100% { opacity: 0; transform: scale(0); }
+      }
+      
+      .text { fill: #F8FAFC; font-family: -apple-system, system-ui, sans-serif; font-size: 16px; font-weight: bold; text-anchor: middle; }
+      .text-sub { fill: #94A3B8; font-family: -apple-system, system-ui, sans-serif; font-size: 12px; font-weight: normal; text-anchor: middle; }
+      .text-btn { fill: #F8FAFC; font-family: -apple-system, system-ui, sans-serif; font-size: 11px; font-weight: 600; text-anchor: middle; }
+      .machine { fill: url(#machine-grad); stroke: #334155; stroke-width: 2; rx: 8; filter: drop-shadow(0 10px 15px rgba(0,0,0,0.3)); }
+      
+      /* Layers */
+      .layer-base { fill: #3B82F6; }
+      .layer-app { fill: #8B5CF6; }
+      .layer-config { fill: #10B981; }
+      .layer-missing { fill: none; stroke: #334155; stroke-width: 2; stroke-dasharray: 4; }
+      .layer-text { fill: white; font-family: monospace; font-size: 12px; text-anchor: middle; dominant-baseline: middle; }
+      
+      /* Base Animation Class (15 seconds total loop) */
+      .anim {
+        animation-duration: 15s;
+        animation-iteration-count: infinite;
+        animation-fill-mode: forwards;
+      }
+      
+      .radar-wave {
+        fill: none; stroke: #0EA5E9; stroke-width: 2;
+        animation: pulse 2s infinite ease-out;
+      }
+      .radar-container { animation-name: radar-trigger; }
+      .data-path {
+        fill: none; stroke: #0EA5E9; stroke-width: 2; stroke-dasharray: 200;
+        animation-name: path-dash; animation-timing-function: linear;
+      }
+      .padlock {
+        transform-origin: 400px 220px;
+        animation-name: lock-pop; animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      .envelope { animation-name: envelope-move; animation-timing-function: ease-in-out; }
+      .status-needs { animation-name: status-needs; }
+      .status-ask { transform-origin: 100px 75px; animation-name: status-ask; animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+      .status-acc { transform-origin: 100px 75px; animation-name: status-acc; animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+      .status-done { animation-name: status-done; }
+      .moving-app { animation-name: move-app; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+      .moving-config { animation-name: move-config; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+      .final-app { animation-name: appear-app; }
+      .final-config { animation-name: appear-config; }
+      .check-mark {
+        transform-origin: 600px 80px;
+        animation-name: check-pop; animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      .cursor { animation-name: cursor-move; animation-timing-function: linear; transform-origin: top left; }
+    </style>
+  </defs>
+
+
+
+  <!-- Title -->
+
+  <!-- Radar Container (Phase 1) -->
+  <g class="radar-container anim">
+    <circle cx="200" cy="220" class="radar-wave" />
+    <circle cx="200" cy="220" class="radar-wave" style="animation-delay: 0.5s" />
+    <circle cx="600" cy="220" class="radar-wave" />
+    <circle cx="600" cy="220" class="radar-wave" style="animation-delay: 0.5s" />
+    <text x="400" y="160" class="text-sub" fill="#0EA5E9">mDNS Discovery</text>
+  </g>
+
+  <!-- Data Path & TLS Lock (Phase 1+) -->
+  <path d="M 300 220 L 500 220" class="data-path anim" />
+  
+  <g class="padlock anim" filter="url(#glow)">
+    <rect x="394" y="218" width="12" height="10" rx="2" fill="#10B981" />
+    <path d="M 396 218 V 215 A 4 4 0 0 1 404 215 V 218" fill="none" stroke="#10B981" stroke-width="2" />
+    <text x="400" y="205" class="text-sub" fill="#10B981" font-size="10">Local Network</text>
+    <text x="400" y="245" class="text-sub" fill="#10B981" font-size="12">TLS Secure</text>
+  </g>
+
+  <!-- Machine A (Left) -->
+  <g transform="translate(100, 100)">
+    <rect width="200" height="240" class="machine" />
+    <text x="100" y="30" class="text">Machine A</text>
+    <text x="100" y="50" class="text-sub">Has full baleen:latest</text>
+    
+    <!-- Layers -->
+    <rect x="20" y="180" width="160" height="30" rx="4" class="layer-base" />
+    <text x="100" y="195" class="layer-text">Base OS (40MB)</text>
+    <rect x="20" y="140" width="160" height="30" rx="4" class="layer-app" />
+    <text x="100" y="155" class="layer-text">App Code (12MB)</text>
+    <rect x="20" y="100" width="160" height="30" rx="4" class="layer-config" />
+    <text x="100" y="115" class="layer-text">Config (1MB)</text>
+  </g>
+
+  <!-- Machine B (Right) -->
+  <g transform="translate(500, 100)">
+    <rect width="200" height="240" class="machine" />
+    <text x="100" y="30" class="text">Machine B</text>
+    
+    <!-- Dynamic Status Text -->
+    <text x="100" y="50" class="text-sub anim status-needs">Needs baleen:latest</text>
+    <text x="100" y="50" class="text-sub anim status-done">Has full baleen:latest</text>
+    
+    <g class="anim status-ask">
+      <rect x="30" y="64" width="140" height="20" rx="4" fill="#334155" stroke="#475569" stroke-width="1" />
+      <text x="100" y="78" class="text-btn">Approve Transfer?</text>
+    </g>
+    
+    <g class="anim status-acc">
+      <rect x="40" y="64" width="120" height="20" rx="4" fill="#10B981" />
+      <text x="100" y="78" class="text-btn">Accepted</text>
+    </g>
+    
+    <!-- Layers -->
+    <rect x="20" y="180" width="160" height="30" rx="4" class="layer-base" />
+    <text x="100" y="195" class="layer-text">Base OS (Cached)</text>
+    <!-- Empty slots -->
+    <rect x="20" y="140" width="160" height="30" rx="4" class="layer-missing" />
+    <rect x="20" y="100" width="160" height="30" rx="4" class="layer-missing" />
+    
+    <!-- Final Arrival Layers (Animated) -->
+    <g class="final-app anim">
+      <rect x="20" y="140" width="160" height="30" rx="4" class="layer-app" />
+      <text x="100" y="155" class="layer-text">App Code (12MB)</text>
+    </g>
+    <g class="final-config anim">
+      <rect x="20" y="100" width="160" height="30" rx="4" class="layer-config" />
+      <text x="100" y="115" class="layer-text">Config (1MB)</text>
+    </g>
+  </g>
+
+  <!-- Share Request Envelope (Phase 2) -->
+  <g class="envelope anim" filter="url(#glow)">
+    <g transform="translate(0, 0)">
+      <!-- Envelope Background / Side Flaps -->
+      <rect x="0" y="0" width="40" height="26" rx="3" fill="#2563EB" />
+      <!-- Envelope Bottom Flap -->
+      <path d="M 0 26 L 20 12 L 40 26 Z" fill="#1D4ED8" />
+      <!-- Envelope Top Flap -->
+      <path d="M 0 0 L 20 14 L 40 0 Z" fill="#60A5FA" />
+    </g>
+    <text x="20" y="42" class="text-sub" fill="#F8FAFC" font-size="10">Request</text>
+  </g>
+
+  <!-- Moving Layers (Phase 3) -->
+  <g class="moving-app anim" filter="url(#glow)">
+    <rect width="160" height="30" rx="4" class="layer-app" />
+    <text x="80" y="15" class="layer-text">App Code (12MB)</text>
+  </g>
+  <g class="moving-config anim" filter="url(#glow)">
+    <rect width="160" height="30" rx="4" class="layer-config" />
+    <text x="80" y="15" class="layer-text">Config (1MB)</text>
+  </g>
+
+  <!-- Checkmark (Phase 4) -->
+  <g class="check-mark anim" filter="url(#glow)">
+    <circle cx="600" cy="80" r="20" fill="#10B981" />
+    <path d="M 590 80 L 596 86 L 610 72" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+
+  <!-- Mouse Cursor for Click Effect -->
+  <g class="cursor anim" filter="url(#glow)">
+    <path d="M 0 0 L 12 12 L 8 12 L 10 18 L 7 19 L 5 13 L 0 18 Z" fill="white" stroke="#334155" stroke-width="1.5" stroke-linejoin="round" />
+  </g>
+
+</svg>
