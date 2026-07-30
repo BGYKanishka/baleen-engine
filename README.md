@@ -120,7 +120,7 @@ The codebase is organized into modular packages located in the `internal/` direc
 ## 🔒 Security & Trust Model
 
 Baleen Engine is designed for local-first peer-to-peer sharing. 
-- **Encryption:** All P2P transfers are encrypted over TLS (implicitly supporting TLS 1.3 with ECDHE) using persistent RSA-2048 self-signed certificates. Data integrity and certificate fingerprints are verified using SHA-256.
+- **Encryption:** All P2P transfers are encrypted over TLS. We explicitly enforce **TLS 1.3 with mandatory ECDHE** (Elliptic Curve Diffie-Hellman Ephemeral) key exchange to guarantee Forward Secrecy. Each daemon session generates a fresh, ephemeral **ECDSA P-256** self-signed certificate in memory. Data integrity and certificate fingerprints are verified using SHA-256.
 - **Dynamic LAN Trust:** Because there is no central certificate authority, Baleen dynamically relies on certificate fingerprints broadcasted by peers over the unauthenticated mDNS protocol.
 - **Approval Workflow:** By default, to prevent unauthorized images from being pushed to your machine, **incoming transfers require explicit user approval** via the CLI or UI before any data is loaded into Docker. This can be configured to auto-approve via your transfer settings if you fully trust your local network. *(Note: Baleen treats the local network similarly to an open SMB share).*
 - **API Security:** The local management API binds exclusively to `127.0.0.1` and enforces strict CORS policies (`localhost`, `127.0.0.1`, `docker-desktop://`). Furthermore, all API requests require a dynamically generated Bearer token (stored in `~/.baleen/service.json`) to prevent CSRF and unauthorized local access.
@@ -132,5 +132,4 @@ Baleen Engine stores its state, caches, and configuration entirely on local disk
 *   **`baleen.db`**: A lightweight `bbolt` key-value store holding your synchronization ledger, peer history, and layer chunk hashes.
 *   **`service.json`**: Contains the state of the active background daemon (e.g., port, PID, dynamically generated API token, node name).
 *   **`transfer_settings.json`**: User-configurable settings (like `auto_approve` workflows and `max_bandwidth` limits).
-*   **`certs/`**: Stores your persistent, self-signed RSA-2048 TLS `cert.pem` and `key.pem` for encrypted P2P connections.
 *   **`incoming/` & `temp/`**: Staging directories used to temporarily store chunks of Docker images during extraction and reception before they are loaded into the Docker daemon.

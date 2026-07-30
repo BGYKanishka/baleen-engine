@@ -75,9 +75,21 @@ export default function PeersTab({ port, token }: { port: number, token: string 
                     {peer.source.toUpperCase()}
                   </span>
                 </td>
-                <td className="px-4 py-3 flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${peer.status === 'reachable' ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                  {peer.status}
+                <td className="px-4 py-3">
+                  {peer.status === 'unverified' ? (
+                    <span
+                      title="No TLS fingerprint yet — peer must be discovered via mDNS before transfers work"
+                      className="flex items-center gap-2 cursor-help"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-amber-400" />
+                      <span className="text-amber-500 dark:text-amber-400">unverified</span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${peer.status === 'reachable' ? 'bg-green-500' : 'bg-red-500'}`} />
+                      {peer.status}
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}

@@ -78,12 +78,12 @@ func runDaemon(args []string) {
 	}
 
 	// Engine startup logic.
-	tempDir, incomingDir, dbPath, certsDir, err := config.SetupBaleenDirectory()
+	tempDir, incomingDir, dbPath, err := config.SetupBaleenDirectory()
 	if err != nil {
 		slog.Error("failed to setup directories", "error", err)
 		os.Exit(1)
 	}
-	tlsConfig, err := network.LoadOrGenerateTLS(certsDir)
+	tlsConfig, err := network.GenerateTLS()
 	if err != nil {
 		slog.Error("failed to generate TLS config", "error", err)
 		os.Exit(1)

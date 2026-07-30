@@ -26,7 +26,9 @@ func TestE2E_PushReceive_FullFlow(t *testing.T) {
 	downloadedChan := make(chan DownloadResult, 1)
 	accepting := &atomic.Bool{}
 	accepting.Store(true)
-	go StartReceiver(context.Background(), &sync.WaitGroup{}, listener, incomingDir, approvalChan, downloadedChan, db, &atomic.Int32{}, accepting)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go StartReceiver(context.Background(), wg, listener, incomingDir, approvalChan, downloadedChan, db, &atomic.Int32{}, accepting)
 	go autoApprove(approvalChan, true)
 
 	tarPath := buildMinimalDockerTarball(t,
@@ -56,7 +58,9 @@ func TestE2E_PushReceive_Rejected(t *testing.T) {
 	downloadedChan := make(chan DownloadResult, 1)
 	accepting := &atomic.Bool{}
 	accepting.Store(true)
-	go StartReceiver(context.Background(), &sync.WaitGroup{}, listener, incomingDir, approvalChan, downloadedChan, db, &atomic.Int32{}, accepting)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go StartReceiver(context.Background(), wg, listener, incomingDir, approvalChan, downloadedChan, db, &atomic.Int32{}, accepting)
 	go autoApprove(approvalChan, false) // ← reject
 
 	tarPath := buildMinimalDockerTarball(t, []string{sha256Digest([]byte("layerA"))})
@@ -108,7 +112,9 @@ func TestE2E_DeltaTransfer_ReceiverAlreadyHasLayer(t *testing.T) {
 	downloadedChan := make(chan DownloadResult, 1)
 	accepting := &atomic.Bool{}
 	accepting.Store(true)
-	go StartReceiver(context.Background(), &sync.WaitGroup{}, listener, incomingDir, approvalChan, downloadedChan, db, &atomic.Int32{}, accepting)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go StartReceiver(context.Background(), wg, listener, incomingDir, approvalChan, downloadedChan, db, &atomic.Int32{}, accepting)
 	go autoApprove(approvalChan, true)
 
 	tarPath := buildMinimalDockerTarball(t, []string{layerA, layerB})
@@ -132,9 +138,9 @@ func TestE2E_DeltaTransfer_ReceiverAlreadyHasLayer(t *testing.T) {
 // testSetup creates TLS config, temp incomingDir, and in-memory ledger.
 func testSetup(t *testing.T) (*tls.Config, string, *ledger.Ledger) {
 	t.Helper()
-	tlsCfg, err := network.LoadOrGenerateTLS(t.TempDir())
+	tlsCfg, err := network.GenerateTLS()
 	if err != nil {
-		t.Fatalf("GenerateEphemeralTLS: %v", err)
+		t.Fatalf("GenerateTLS: %v", err)
 	}
 	incomingDir := t.TempDir()
 	dbPath := filepath.Join(t.TempDir(), "test.db")

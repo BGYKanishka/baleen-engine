@@ -29,7 +29,7 @@ func runClient(args []string) {
 		finalName = config.GenerateNodeName()
 	}
 
-	tempDir, _, _, _, err := config.SetupBaleenDirectory()
+	tempDir, _, _, err := config.SetupBaleenDirectory()
 	if err != nil {
 		slog.Error("failed to setup directories", "error", err)
 		os.Exit(1)

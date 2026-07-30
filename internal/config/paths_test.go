@@ -38,7 +38,7 @@ func TestSetupBaleenDirectory(t *testing.T) {
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
 
-	tempDir, incomingDir, dbPath, certsDir, err := SetupBaleenDirectory()
+	tempDir, incomingDir, dbPath, err := SetupBaleenDirectory()
 	if err != nil {
 		t.Fatalf("SetupBaleenDirectory failed: %v", err)
 	}
@@ -53,12 +53,9 @@ func TestSetupBaleenDirectory(t *testing.T) {
 	if dbPath != filepath.Join(baleenRoot, "baleen.db") {
 		t.Errorf("Unexpected dbPath: %s", dbPath)
 	}
-	if certsDir != filepath.Join(baleenRoot, "certs") {
-		t.Errorf("Unexpected certsDir: %s", certsDir)
-	}
 
 	// Verify directories were actually created
-	for _, dir := range []string{tempDir, incomingDir, certsDir} {
+	for _, dir := range []string{tempDir, incomingDir} {
 		info, err := os.Stat(dir)
 		if err != nil {
 			t.Errorf("Directory %s was not created: %v", dir, err)

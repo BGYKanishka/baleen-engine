@@ -3,6 +3,7 @@ package transfer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -34,6 +35,9 @@ func StartReceiver(ctx context.Context, wg *sync.WaitGroup, listener net.Listene
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
 			select {
 			case <-ctx.Done():
 				return
@@ -123,7 +127,7 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 		return
 	}
 
-	_, _, dbPath, _, err := config.SetupBaleenDirectory()
+	_, _, dbPath, err := config.SetupBaleenDirectory()
 	if err != nil {
 		slog.Error("error getting directories", "error", err)
 		recordCommitWithStatus(req, engineLedger, "Failed")

@@ -27,21 +27,19 @@ func ServiceStatePath() (string, error) {
 }
 
 // creates the folder and returns paths
-func SetupBaleenDirectory() (string, string, string, string, error) {
+func SetupBaleenDirectory() (string, string, string, error) {
 	baleenRoot, err := BaleenDir()
 	if err != nil {
-		return "", "", "", "", err
+		return "", "", "", err
 	}
 
 	tempDir := filepath.Join(baleenRoot, "temp")
 	incomingDir := filepath.Join(baleenRoot, "incoming")
 	dbPath := filepath.Join(baleenRoot, "baleen.db")
-	certsDir := filepath.Join(baleenRoot, "certs")
 
-	// Create both directories
+	// Create directories (certs dir is no longer needed — certs are ephemeral)
 	os.MkdirAll(tempDir, 0755)
 	os.MkdirAll(incomingDir, 0755)
-	os.MkdirAll(certsDir, 0755)
 
-	return tempDir, incomingDir, dbPath, certsDir, nil
+	return tempDir, incomingDir, dbPath, nil
 }

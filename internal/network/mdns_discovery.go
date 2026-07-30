@@ -84,6 +84,12 @@ func DiscoverPeers(ctx context.Context, wg *sync.WaitGroup, currentNodeName stri
 					}
 				}
 
+				if fingerprint == "" {
+					slog.Warn("ignoring peer with no TLS fingerprint — possibly an outdated or spoofed node",
+						"peer", entry.Instance, "ip", validAddress)
+					continue
+				}
+
 				prMap := registry.GetAllPeers()
 				if _, exists := prMap[entry.Instance]; !exists {
 					slog.Info("found remote peer", "peer", entry.Instance, "ip", validAddress)

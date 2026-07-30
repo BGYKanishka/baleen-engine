@@ -128,7 +128,8 @@ func (pr *PeerRegistry) AddCustomPeer(name, address, source string) {
 	}
 
 	pr.nodes[name] = address
-	pr.metadata[name] = &PeerMeta{Source: source, Status: "reachable", Arch: "unknown", Fingerprint: "", LastSeen: time.Now()}
+	status := "unverified"
+	pr.metadata[name] = &PeerMeta{Source: source, Status: status, Arch: "unknown", Fingerprint: "", LastSeen: time.Now()}
 	go pr.detectAndUpdateArch(name, address)
 }
 
