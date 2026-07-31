@@ -22,7 +22,7 @@ export function useDaemon(ddClient: any) {
   }, []);
 
   // Called once we have a confirmed port and token.
-  
+
   const connectToService = useCallback((p: number, t: string, nName: string) => {
     portRef.current  = p;
     tokenRef.current = t;
@@ -36,8 +36,10 @@ export function useDaemon(ddClient: any) {
   }, [addLog]);
 
   // Check the status of the daemon.
-  const checkDaemonStatus = useCallback(() => {
-    setStatus('checking');
+  const checkDaemonStatus = useCallback((silent = false) => {
+    if (!silent) {
+      setStatus('checking');
+    }
 
     ddClient.extension.host.cli.exec('baleen', ['status'], {
       stream: {
@@ -165,7 +167,7 @@ export function useDaemon(ddClient: any) {
 
 
   // Stop the daemon process via `baleen stop`.
-  
+
   const stopDaemon = useCallback(async () => {
     isIntentionalStopRef.current = true;
     const p = portRef.current;
@@ -193,7 +195,7 @@ export function useDaemon(ddClient: any) {
     addLog('[SYSTEM] Service stopped.');
   }, [addLog]);
 
-  
+
   // Cleanup on unmount: clear any pending timeouts or intervals.
   useEffect(() => {
     checkDaemonStatus();
@@ -204,6 +206,15 @@ export function useDaemon(ddClient: any) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (status !== 'stopped' && status !== 'error') return;
+
+    const interval = setInterval(() => {
+      checkDaemonStatus(true);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [status, checkDaemonStatus]);
 
   const heartbeatFailsRef = useRef(0);
   useEffect(() => {
@@ -291,7 +302,7 @@ export function useDaemon(ddClient: any) {
         // ignore fetch errors, heartbeat handles disconnects
       }
     };
-    
+
     fetchLogs();
     logIntervalRef.current = setInterval(fetchLogs, 2000);
 

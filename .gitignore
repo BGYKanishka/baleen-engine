@@ -38,3 +38,4 @@ ui/node_modules/
 
 # Generated knowledge graph
 knowledge-graph.html
+update.sh

@@ -75,7 +75,8 @@ func StartClientREPL(state service.ServiceState, tempDir string) {
 
 	// Channel the poll goroutine uses to surface incoming transfer requests.
 	pendingChan := make(chan transfer.TransferRequest, 1)
-	go pollPendingApproval(client, pendingChan)
+	stopChan := make(chan struct{})
+	go pollPendingApproval(client, pendingChan, stopChan)
 
 	inputChan := make(chan string)
 	syncChan := make(chan struct{})
@@ -106,15 +107,25 @@ func StartClientREPL(state service.ServiceState, tempDir string) {
 
 			handleClientCommand(input, client, rl)
 			syncChan <- struct{}{}
+			
+		case <-stopChan:
+			fmt.Println("\nStopping Baleen Engine.")
+			fmt.Println("Baleen Engine has been stopped.")
+			os.Exit(0)
 		}
 	}
 }
 
 // feedInput reads user input from the readline instance and sends it to the input channel.
-func pollPendingApproval(client *daemonClient, out chan<- transfer.TransferRequest) {
+func pollPendingApproval(client *daemonClient, out chan<- transfer.TransferRequest, stopOut chan<- struct{}) {
 	var lastHash string
 	for {
 		time.Sleep(2 * time.Second)
+		if !client.isHealthy() {
+			stopOut <- struct{}{}
+			return
+		}
+
 		resp, err := client.get("/api/pending")
 		if err != nil || resp.StatusCode == http.StatusNoContent {
 			if resp != nil {
