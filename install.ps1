@@ -4,8 +4,25 @@ Write-Host "Welcome to Baleen Engine Installer" -ForegroundColor Cyan
 
 # Check for required dependencies
 if (-not (Get-Command "go" -ErrorAction SilentlyContinue)) {
-    Write-Host "Error: Go is not installed. Please install Go first." -ForegroundColor Red
-    exit 1
+    Write-Host "Go is not installed. Attempting to install Go..." -ForegroundColor Yellow
+    if (Get-Command "winget" -ErrorAction SilentlyContinue) {
+        Write-Host "Installing Go via winget..."
+        winget install GoLang.Go --accept-source-agreements --accept-package-agreements
+        # Refresh environment variables
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+    } elseif (Get-Command "choco" -ErrorAction SilentlyContinue) {
+        Write-Host "Installing Go via Chocolatey..."
+        choco install golang -y
+        # Refresh environment variables
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+    } else {
+        Write-Host "Error: Neither winget nor choco is installed. Please install Go manually." -ForegroundColor Red
+        exit 1
+    }
+    
+    if (-not (Get-Command "go" -ErrorAction SilentlyContinue)) {
+        Write-Host "Warning: Go was installed but 'go' command is still not found. You might need to restart your terminal." -ForegroundColor Yellow
+    }
 }
 
 if (-not (Get-Command "docker" -ErrorAction SilentlyContinue)) {

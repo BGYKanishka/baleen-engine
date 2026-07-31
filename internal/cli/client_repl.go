@@ -75,7 +75,8 @@ func StartClientREPL(state service.ServiceState, tempDir string) {
 
 	// Channel the poll goroutine uses to surface incoming transfer requests.
 	pendingChan := make(chan transfer.TransferRequest, 1)
-	go pollPendingApproval(client, pendingChan)
+	stopChan := make(chan struct{})
+	go pollPendingApproval(client, pendingChan, stopChan)
 
 	inputChan := make(chan string)
 	syncChan := make(chan struct{})
@@ -106,15 +107,25 @@ func StartClientREPL(state service.ServiceState, tempDir string) {
 
 			handleClientCommand(input, client, rl)
 			syncChan <- struct{}{}
+			
+		case <-stopChan:
+			fmt.Println("\nStopping Baleen Engine.")
+			fmt.Println("Baleen Engine has been stopped.")
+			os.Exit(0)
 		}
 	}
 }
 
 // feedInput reads user input from the readline instance and sends it to the input channel.
-func pollPendingApproval(client *daemonClient, out chan<- transfer.TransferRequest) {
+func pollPendingApproval(client *daemonClient, out chan<- transfer.TransferRequest, stopOut chan<- struct{}) {
 	var lastHash string
 	for {
 		time.Sleep(2 * time.Second)
+		if !client.isHealthy() {
+			stopOut <- struct{}{}
+			return
+		}
+
 		resp, err := client.get("/api/pending")
 		if err != nil || resp.StatusCode == http.StatusNoContent {
 			if resp != nil {
@@ -188,6 +199,12 @@ func handleClientCommand(input string, client *daemonClient, rl *readline.Instan
 
 	case "prune":
 		clientRunPrune()
+
+	case "clean-logs":
+		clientHandleCleanLogs(client, parts)
+
+	case "logs":
+		clientHandleLogs(client)
 
 	case "stop":
 		fmt.Print("\nStopping Baleen Engine")
@@ -429,6 +446,50 @@ func clientRunPrune() {
 	}
 }
 
+func clientHandleCleanLogs(client *daemonClient, parts []string) {
+	removeCache := len(parts) > 1 && parts[len(parts)-1] == "-rm"
+	payload := map[string]bool{"removeCache": removeCache}
+
+	resp, err := client.post("/api/logs/clean", payload)
+	if err != nil {
+		fmt.Printf("Failed to clean daemon logs: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var result map[string]string
+	json.NewDecoder(resp.Body).Decode(&result)
+	if msg, ok := result["message"]; ok {
+		fmt.Println(msg)
+	} else {
+		fmt.Printf("Clean logs status: %s\n", resp.Status)
+	}
+}
+
+func clientHandleLogs(client *daemonClient) {
+	resp, err := client.get("/api/logs")
+	if err != nil {
+		fmt.Printf("Failed to fetch daemon logs: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var logs []string
+	if err := json.NewDecoder(resp.Body).Decode(&logs); err != nil {
+		fmt.Printf("Failed to parse logs: %v\n", err)
+		return
+	}
+
+	if len(logs) == 0 {
+		fmt.Println("Daemon log is empty.")
+		return
+	}
+
+	for _, line := range logs {
+		fmt.Println(line)
+	}
+}
+
 func clientHandleStop(client *daemonClient) {
 	resp, err := client.post("/api/stop", nil)
 	if err != nil {
@@ -458,6 +519,8 @@ func printClientWelcome(state service.ServiceState) {
 	fmt.Println("  history                              - View the transfer ledger")
 	fmt.Println("  gc <all|old|hash> [-rm]              - Run garbage collection")
 	fmt.Println("  prune                                - Clean up old docker images")
+	fmt.Println("  logs                                 - View recent daemon logs")
+	fmt.Println("  clean-logs [-rm]                     - Truncate daemon log (use -rm to delete)")
 	fmt.Println("  stop                                 - Stop the background service and exit")
 	fmt.Println("  exit                                 - Disconnect CLI (engine keeps running)")
 }

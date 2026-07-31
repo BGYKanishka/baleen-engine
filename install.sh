@@ -11,8 +11,36 @@ fi
 
 # Check for required dependencies
 if ! command -v go &> /dev/null; then
-    echo "Error: Go is not installed. Please install Go first."
-    exit 1
+    echo "Go is not installed. Attempting to install Go..."
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        if command -v brew &> /dev/null; then
+            brew install go
+        else
+            echo "Error: Homebrew is not installed. Please install Homebrew or Go manually."
+            exit 1
+        fi
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        if command -v apt-get &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y golang
+        elif command -v dnf &> /dev/null; then
+            sudo dnf install -y golang
+        elif command -v yum &> /dev/null; then
+            sudo yum install -y golang
+        elif command -v pacman &> /dev/null; then
+            sudo pacman -S --noconfirm go
+        else
+            echo "Error: Could not find a suitable package manager. Please install Go manually."
+            exit 1
+        fi
+    else
+        echo "Error: Automatic Go installation is not supported on this OS ($OSTYPE). Please install Go manually."
+        exit 1
+    fi
+    
+    if ! command -v go &> /dev/null; then
+        echo "Error: Go installation finished, but 'go' command is still not found. Please check your PATH or install manually."
+        exit 1
+    fi
 fi
 
 if ! command -v docker &> /dev/null; then
