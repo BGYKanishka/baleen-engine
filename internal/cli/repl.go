@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"crypto/tls"
 	"fmt"
 	"log/slog"
@@ -177,6 +178,49 @@ func handleCleanLogs(parts []string) {
 	fmt.Println("Daemon log truncated.")
 }
 
+func handleLogs() {
+	baleenRoot, err := config.BaleenDir()
+	if err != nil {
+		fmt.Printf("Failed to resolve home dir: %v\n", err)
+		return
+	}
+	logPath := filepath.Join(baleenRoot, "daemon.log")
+
+	file, err := os.Open(logPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("Daemon log is empty.")
+			return
+		}
+		fmt.Printf("Failed to open log file: %v\n", err)
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	var lines []string
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+		if len(lines) > 500 {
+			lines = lines[1:]
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Printf("Error reading log file: %v\n", err)
+		return
+	}
+
+	if len(lines) == 0 {
+		fmt.Println("Daemon log is empty.")
+		return
+	}
+
+	for _, line := range lines {
+		fmt.Println(line)
+	}
+}
+
 // parses the input and dispatches to the correct handler.
 func handleCommand(input string, rl *readline.Instance, inputChan chan string, syncChan chan struct{}, ctx EngineContext) {
 	parts := strings.Split(input, " ")
@@ -195,6 +239,8 @@ func handleCommand(input string, rl *readline.Instance, inputChan chan string, s
 		handleGC(parts, ctx)
 	case "prune":
 		handlePrune()
+	case "logs":
+		handleLogs()
 	case "clean-logs":
 		handleCleanLogs(parts)
 	case "exit":
@@ -213,6 +259,7 @@ func printWelcome() {
 	fmt.Println("  history                             - View the transfer ledger")
 	fmt.Println("  gc <all|old>                        - Run garbage collection on the transfer ledger")
 	fmt.Println("  prune                               - Clean up old docker images")
+	fmt.Println("  logs                                - View recent daemon logs")
 	fmt.Println("  clean-logs [-rm]                    - Truncate daemon log (use -rm to delete)")
 	fmt.Println("  exit                                - Shut down engine")
 }
