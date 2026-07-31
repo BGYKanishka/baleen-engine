@@ -189,6 +189,9 @@ func handleClientCommand(input string, client *daemonClient, rl *readline.Instan
 	case "prune":
 		clientRunPrune()
 
+	case "clean-logs":
+		clientHandleCleanLogs(client, parts)
+
 	case "stop":
 		fmt.Print("\nStopping Baleen Engine")
 		clientHandleStop(client)
@@ -429,6 +432,26 @@ func clientRunPrune() {
 	}
 }
 
+func clientHandleCleanLogs(client *daemonClient, parts []string) {
+	removeCache := len(parts) > 1 && parts[len(parts)-1] == "-rm"
+	payload := map[string]bool{"removeCache": removeCache}
+
+	resp, err := client.post("/api/logs/clean", payload)
+	if err != nil {
+		fmt.Printf("Failed to clean daemon logs: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var result map[string]string
+	json.NewDecoder(resp.Body).Decode(&result)
+	if msg, ok := result["message"]; ok {
+		fmt.Println(msg)
+	} else {
+		fmt.Printf("Clean logs status: %s\n", resp.Status)
+	}
+}
+
 func clientHandleStop(client *daemonClient) {
 	resp, err := client.post("/api/stop", nil)
 	if err != nil {
@@ -458,6 +481,7 @@ func printClientWelcome(state service.ServiceState) {
 	fmt.Println("  history                              - View the transfer ledger")
 	fmt.Println("  gc <all|old|hash> [-rm]              - Run garbage collection")
 	fmt.Println("  prune                                - Clean up old docker images")
+	fmt.Println("  clean-logs [-rm]                     - Truncate daemon log (use -rm to delete)")
 	fmt.Println("  stop                                 - Stop the background service and exit")
 	fmt.Println("  exit                                 - Disconnect CLI (engine keeps running)")
 }

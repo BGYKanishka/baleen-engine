@@ -51,6 +51,7 @@ func StartDaemonServer(ctx cli.EngineContext, token string, stopCh chan<- struct
 	mux.HandleFunc("POST /api/reject", withHeartbeat(handlers.Reject(ctx)))
 	mux.HandleFunc("POST /api/gc", withHeartbeat(handlers.GC(ctx)))
 	mux.HandleFunc("GET /api/logs", withHeartbeat(handlers.Logs()))
+	mux.HandleFunc("POST /api/logs/clean", withHeartbeat(handlers.CleanLogs()))
 	mux.HandleFunc("POST /api/transfer/pause", withHeartbeat(handlers.Pause()))
 	mux.HandleFunc("POST /api/transfer/resume", withHeartbeat(handlers.Resume()))
 	mux.HandleFunc("POST /api/transfer/cancel", withHeartbeat(handlers.Cancel()))

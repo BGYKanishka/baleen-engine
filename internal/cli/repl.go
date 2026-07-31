@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/BGYKanishka/baleen-engine/internal/config"
 	"github.com/BGYKanishka/baleen-engine/internal/docker"
 	"github.com/BGYKanishka/baleen-engine/internal/ledger"
 	"github.com/BGYKanishka/baleen-engine/internal/logger"
@@ -145,6 +146,37 @@ func resolveApproval(input string, req *transfer.ApprovalRequest, rl *readline.I
 	rl.Refresh()
 }
 
+func handleCleanLogs(parts []string) {
+	baleenRoot, err := config.BaleenDir()
+	if err != nil {
+		fmt.Printf("Failed to resolve home dir: %v\n", err)
+		return
+	}
+	logPath := filepath.Join(baleenRoot, "daemon.log")
+
+	removeCache := len(parts) > 1 && parts[len(parts)-1] == "-rm"
+	if removeCache {
+		if err := os.Remove(logPath); err != nil && !os.IsNotExist(err) {
+			fmt.Printf("Failed to delete log file: %v\n", err)
+			return
+		}
+		fmt.Println("Daemon log deleted.")
+		return
+	}
+
+	file, err := os.OpenFile(logPath, os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("Daemon log already empty.")
+			return
+		}
+		fmt.Printf("Failed to truncate log file: %v\n", err)
+		return
+	}
+	file.Close()
+	fmt.Println("Daemon log truncated.")
+}
+
 // parses the input and dispatches to the correct handler.
 func handleCommand(input string, rl *readline.Instance, inputChan chan string, syncChan chan struct{}, ctx EngineContext) {
 	parts := strings.Split(input, " ")
@@ -163,6 +195,8 @@ func handleCommand(input string, rl *readline.Instance, inputChan chan string, s
 		handleGC(parts, ctx)
 	case "prune":
 		handlePrune()
+	case "clean-logs":
+		handleCleanLogs(parts)
 	case "exit":
 		fmt.Println("\nShutting down Baleen Engine...")
 		os.Exit(0)
@@ -179,5 +213,6 @@ func printWelcome() {
 	fmt.Println("  history                             - View the transfer ledger")
 	fmt.Println("  gc <all|old>                        - Run garbage collection on the transfer ledger")
 	fmt.Println("  prune                               - Clean up old docker images")
+	fmt.Println("  clean-logs [-rm]                    - Truncate daemon log (use -rm to delete)")
 	fmt.Println("  exit                                - Shut down engine")
 }
