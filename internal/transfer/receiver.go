@@ -342,6 +342,7 @@ func recordCommitWithStatus(req TransferRequest, engineLedger *ledger.Ledger, st
 		Hash:      req.Hash,
 		Image:     req.ImageName,
 		Author:    req.Author,
+		Peer:      req.Author,
 		Timestamp: time.Now().Format(time.RFC3339),
 		Direction: "Imported",
 		Status:    status,

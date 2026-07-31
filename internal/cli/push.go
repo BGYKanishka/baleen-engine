@@ -51,7 +51,7 @@ func handlePush(parts []string, rl *readline.Instance, inputChan chan string, sy
 		return
 	}
 
-	RecordAndPush(ctx, exportedFilePath, targetImage, finalArch, targetIP, targetPort, fingerprint, "")
+	RecordAndPush(ctx, exportedFilePath, targetImage, finalArch, targetIP, targetPort, fingerprint, "", parts[1])
 }
 
 // runs the Docker export

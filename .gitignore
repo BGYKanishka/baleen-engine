@@ -35,6 +35,3 @@ build/
 # UI build artifacts (just in case)
 ui/dist/
 ui/node_modules/
-
-# Generated knowledge graph
-knowledge-graph.html

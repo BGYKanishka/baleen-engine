@@ -107,6 +107,11 @@ func runDaemon(args []string) {
 	}
 	defer engineLedger.Close()
 
+	// Clean up any pending transfers from previous runs that may have crashed
+	if err := engineLedger.FailPendingTransfers(); err != nil {
+		slog.Warn("failed to cleanup pending transfers", "error", err)
+	}
+
 	// Initialize Docker manager.
 	dockerManager, err := docker.NewManager()
 	if err != nil {

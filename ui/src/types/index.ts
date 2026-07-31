@@ -30,6 +30,7 @@ export interface LedgerEntry {
   image: string;
   direction: string;
   peer: string;
+  author: string;
   status: string;
 }
 

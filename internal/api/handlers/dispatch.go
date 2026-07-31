@@ -45,6 +45,7 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 		Hash:      tempID,
 		Image:     image,
 		Author:    ctx.GetNodeName(),
+		Peer:      peer,
 		Timestamp: time.Now().Format(time.RFC3339),
 		Direction: "Exporting",
 		Status:    "Pending",
@@ -57,6 +58,7 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 				Hash:      tempID,
 				Image:     image,
 				Author:    ctx.GetNodeName(),
+				Peer:      peer,
 				Timestamp: time.Now().Format(time.RFC3339),
 				Direction: "Exported",
 				Status:    "Crashed",
@@ -70,6 +72,7 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 			Hash:      tempID,
 			Image:     image,
 			Author:    ctx.GetNodeName(),
+			Peer:      peer,
 			Timestamp: time.Now().Format(time.RFC3339),
 			Direction: "Exported",
 			Status:    "Failed",
@@ -91,6 +94,7 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 			Hash:      tempID,
 			Image:     image,
 			Author:    ctx.GetNodeName(),
+			Peer:      peer,
 			Timestamp: time.Now().Format(time.RFC3339),
 			Direction: "Exported",
 			Status:    "Failed",
@@ -98,5 +102,5 @@ func runExportPipeline(ctx cli.EngineContext, image, peer, buildContext string) 
 		return
 	}
 
-	cli.RecordAndPush(ctx, exportedFilePath, image, arch, targetIP, port, fingerprint, tempID)
+	cli.RecordAndPush(ctx, exportedFilePath, image, arch, targetIP, port, fingerprint, tempID, peer)
 }

@@ -21,7 +21,7 @@ func ResolveAndDetect(ctx EngineContext, peer string) (ip string, port int, fing
 }
 
 // writes the export to the ledger then streams it to the target node.
-func RecordAndPush(ctx EngineContext, exportedPath, image, arch, targetIP string, targetPort int, fingerprint string, tempID string) {
+func RecordAndPush(ctx EngineContext, exportedPath, image, arch, targetIP string, targetPort int, fingerprint string, tempID string, peerName string) {
 	fmt.Printf("Streaming image to disk at: %s\n", exportedPath)
 
 	hash, err := ledger.GenerateHash(exportedPath)
@@ -39,6 +39,7 @@ func RecordAndPush(ctx EngineContext, exportedPath, image, arch, targetIP string
 		Hash:      hash,
 		Image:     image,
 		Author:    ctx.GetNodeName(),
+		Peer:      peerName,
 		Timestamp: time.Now().Format(time.RFC3339),
 		Direction: "Exporting",
 		Status:    "Pending",
@@ -53,6 +54,7 @@ func RecordAndPush(ctx EngineContext, exportedPath, image, arch, targetIP string
 		Hash:      hash,
 		Image:     image,
 		Author:    ctx.GetNodeName(),
+		Peer:      peerName,
 		Timestamp: time.Now().Format(time.RFC3339),
 		Direction: "Exported",
 		Status:    transfer.ParseErrorToStatus(pushErr),

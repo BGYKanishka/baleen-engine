@@ -38,7 +38,7 @@ export default function LedgerTab({ port, token }: { port: number, token: string
               <td className="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">{new Date(record.timestamp).toLocaleString()}</td>
               <td className="px-4 py-3 capitalize whitespace-nowrap">{record.direction}</td>
               <td className="px-4 py-3 font-medium font-mono text-gray-900 dark:text-gray-200 whitespace-nowrap">{record.image}</td>
-              <td className="px-4 py-3 font-mono text-gray-800 dark:text-gray-300 whitespace-nowrap">{record.peer || 'Unknown'}</td>
+              <td className="px-4 py-3 font-mono text-gray-800 dark:text-gray-300 whitespace-nowrap">{record.peer || record.author || 'Unknown'}</td>
               <td className="px-4 py-3 min-w-[300px]">
                 <span className={
                   record.status === 'Completed' ? 'text-green-600 dark:text-green-400' : 

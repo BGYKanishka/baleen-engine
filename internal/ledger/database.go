@@ -18,6 +18,7 @@ type Commit struct {
 	Hash      string `json:"hash"`
 	Image     string `json:"image"`
 	Author    string `json:"author"`
+	Peer      string `json:"peer"`
 	Timestamp string `json:"timestamp"`
 	Direction string `json:"direction"`
 	Status    string `json:"status"`
@@ -215,5 +216,31 @@ func (l *Ledger) ClearCacheMemory() error {
 		_, err = tx.CreateBucketIfNotExists([]byte("KnownLayers"))
 
 		return err
+	})
+}
+
+// FailPendingTransfers changes any 'Pending' status commits to 'Failed'
+func (l *Ledger) FailPendingTransfers() error {
+	return l.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte("Ledger"))
+		if bucket == nil {
+			return nil
+		}
+
+		c := bucket.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var commit Commit
+			if err := json.Unmarshal(v, &commit); err != nil {
+				continue
+			}
+			if commit.Status == "Pending" {
+				commit.Status = "Failed"
+				commitJSON, err := json.Marshal(commit)
+				if err == nil {
+					bucket.Put(k, commitJSON)
+				}
+			}
+		}
+		return nil
 	})
 }
