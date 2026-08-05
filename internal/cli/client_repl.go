@@ -186,10 +186,14 @@ func handleClientCommand(input string, client *daemonClient, rl *readline.Instan
 
 	case "push":
 		if len(parts) < 3 {
-			fmt.Println("  Usage: push <NODE_NAME_OR_IP:PORT> <IMAGE_NAME>")
+			fmt.Println("  Usage: push <NODE_NAME_OR_IP:PORT> <IMAGE_NAME> [BUILD_CONTEXT]")
 			return
 		}
-		clientHandlePush(client, parts[1], parts[2])
+		buildContext := "."
+		if len(parts) >= 4 {
+			buildContext = parts[3]
+		}
+		clientHandlePush(client, parts[1], parts[2], buildContext)
 
 	case "history":
 		clientHandleHistory(client)
@@ -254,12 +258,19 @@ func clientHandlePeers(client *daemonClient) {
 	fmt.Println("--------------------------------------------------")
 }
 
-func clientHandlePush(client *daemonClient, peer, image string) {
+func clientHandlePush(client *daemonClient, peer, image, buildContext string) {
 	fmt.Printf("\nDispatching push of '%s' to '%s' via daemon...\n", image, peer)
+
+	absContext, err := filepath.Abs(buildContext)
+	if err != nil {
+		fmt.Printf("Failed to resolve build context path: %v\n", err)
+		return
+	}
+
 	resp, err := client.post("/api/push", map[string]string{
 		"image":        image,
 		"peer":         peer,
-		"buildContext": ".",
+		"buildContext": absContext,
 	})
 	if err != nil {
 		fmt.Printf("Failed to dispatch push: %v\n", err)
