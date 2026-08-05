@@ -58,7 +58,7 @@ func runDaemon(args []string) {
 			finalName = config.GenerateNodeName()
 		}
 	}
-	targetPort := 0
+	targetPort := 52342
 
 	ok, err := service.TryAcquireLock()
 	if err != nil {
@@ -94,8 +94,12 @@ func runDaemon(args []string) {
 	address := fmt.Sprintf(":%d", targetPort)
 	listener, err := tls.Listen("tcp", address, tlsConfig)
 	if err != nil {
-		slog.Error("failed to bind network port", "error", err)
-		os.Exit(1)
+		slog.Warn("default p2p port unavailable, falling back to random port", "error", err)
+		listener, err = tls.Listen("tcp", ":0", tlsConfig)
+		if err != nil {
+			slog.Error("failed to bind network port", "error", err)
+			os.Exit(1)
+		}
 	}
 	p2pPort := listener.Addr().(*net.TCPAddr).Port
 

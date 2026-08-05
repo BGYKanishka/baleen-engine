@@ -10,12 +10,15 @@ Baleen Engine is a high-speed, local-first, peer-to-peer Docker image sharing en
 ## 🚀 Key Features
 
 *   **Peer-to-Peer Transfers:** Direct, high-speed TCP socket transfers over persistent TLS — no internet connection or cloud registry required.
-*   **Autonomous Discovery:** Built-in `zeroconf` seamlessly handles machine discovery on your local network.
-*   **Ledger:** Uses a historical ledger powered by `bbolt` to track image synchronization history and cache layers.
-*   **Delta Transfer Engine:** Smart layer pruning and stitching. Only the layers that the peer is missing are transferred.
+*   **Autonomous Discovery:** Built-in `zeroconf` seamlessly discovers other Baleen nodes on your local network automatically.
+*   **Delta Transfer Engine:** Smart layer pruning and stitching. Only the layers that the peer is missing are transferred — saving time and bandwidth.
+*   **Transfer Controls:** Pause, resume, and cancel any active transfer in real time from the UI.
+*   **Approval Workflow:** Incoming transfers require explicit approval before loading into Docker — or enable auto-approve if you trust your network.
+*   **Bandwidth Limiting:** Set maximum transfer speeds to avoid saturating your network.
 *   **Smart Architecture Detection:** Automatically handles multi-architecture image resolution across different platforms via `docker buildx`.
-*   **Dual-Mode Interface:** Run as a lightweight background daemon with an interactive hybrid CLI, or use the fully integrated Docker Desktop Extension with a visual React-based UI.
-*   **Cross-Platform Support:** Written in Go with native Docker SDK integration, supporting deployment on Windows, macOS, and Linux.
+*   **Ledger & History:** Full synchronization history powered by `bbolt` — track every image that's been shared.
+*   **Dual-Mode Interface:** Use the fully integrated Docker Desktop Extension UI, or the interactive CLI via `docker baleen`.
+*   **Cross-Platform Support:** Works on macOS, Linux, and Windows.
 
 ## ⚙️ Architecture Overview
 
@@ -125,6 +128,27 @@ Baleen Engine is designed for local-first peer-to-peer sharing.
 - **Approval Workflow:** By default, to prevent unauthorized images from being pushed to your machine, **incoming transfers require explicit user approval** via the CLI or UI before any data is loaded into Docker. This can be configured to auto-approve via your transfer settings if you fully trust your local network. *(Note: Baleen treats the local network similarly to an open SMB share).*
 - **API Security:** The local management API binds exclusively to `127.0.0.1` and enforces strict CORS policies (`localhost`, `127.0.0.1`, `docker-desktop://`). Furthermore, all API requests require a dynamically generated Bearer token (stored in `~/.baleen/service.json`) to prevent CSRF and unauthorized local access.
 
+## 💻 CLI Usage
+
+Baleen also ships as a Docker CLI plugin. After installing the extension, use it from the terminal:
+
+```bash
+docker baleen
+```
+
+This opens an interactive REPL where you can manage everything from the command line:
+
+```
+baleen> peers                                - Show active nodes on network
+baleen> push <NODE_NAME> <IMAGE>             - Send a Docker image to a peer
+baleen> history                              - View the transfer ledger
+baleen> gc <all|old|hash> [-rm]              - Run garbage collection
+baleen> prune                                - Clean up old docker images
+baleen> logs                                 - View recent daemon logs
+baleen> stop                                 - Stop the engine
+baleen> exit                                 - Disconnect CLI (engine keeps running)
+```
+
 ## 📁 Local Data (`~/.baleen`)
 
 Baleen Engine stores its state, caches, and configuration entirely on local disk within the `~/.baleen` directory. No data is sent to the cloud.
@@ -132,4 +156,10 @@ Baleen Engine stores its state, caches, and configuration entirely on local disk
 *   **`baleen.db`**: A lightweight `bbolt` key-value store holding your synchronization ledger, peer history, and layer chunk hashes.
 *   **`service.json`**: Contains the state of the active background daemon (e.g., port, PID, dynamically generated API token, node name).
 *   **`transfer_settings.json`**: User-configurable settings (like `auto_approve` workflows and `max_bandwidth` limits).
+*   **`network_settings.json`**: Network feature flags (`mdns_discovery` and `broadcast_presence` toggles).
 *   **`incoming/` & `temp/`**: Staging directories used to temporarily store chunks of Docker images during extraction and reception before they are loaded into the Docker daemon.
+*   **`layers/`**: Local layer cache — enables delta transfers by storing previously seen layers.
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).

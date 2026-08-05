@@ -68,6 +68,12 @@ func rejectConnection(conn net.Conn) {
 
 // reads a full Docker tarball and streams
 func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan DownloadResult, engineLedger *ledger.Ledger, activeTransfers *atomic.Int32) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic recovered in handleIncomingTransfer", "error", r)
+		}
+	}()
+
 	activeTransfers.Add(1)
 	defer activeTransfers.Add(-1)
 	defer conn.Close()

@@ -2,6 +2,7 @@ package transfer
 
 import (
 	"archive/tar"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -40,6 +41,9 @@ func buildDigestToPathMap(tarPath string, allDigests []string) (map[string]strin
 	}
 
 	mainLayers := item.Layers
+	if len(mainLayers) != len(allDigests) {
+		return nil, fmt.Errorf("manifest layer count mismatch: cannot stitch payload safely")
+	}
 
 	pathMap := make(map[string]string, len(allDigests))
 	for i, physicalPath := range mainLayers {

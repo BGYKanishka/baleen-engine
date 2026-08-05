@@ -81,19 +81,23 @@ func StartDaemonServer(daemonCtx context.Context, ctx cli.EngineContext, token s
 
 	handler := corsAndAuthMiddleware(mux, token)
 
-	// Bind to a random localhost port — this is the HTTP API port (not the TLS P2P port).
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	// Bind to a static preferred localhost port (52341).
+	listener, err := net.Listen("tcp", "127.0.0.1:52341")
 	if err != nil {
-		slog.Error("failed to start daemon listener", "error", err)
-		// Signal the main goroutine to shut down cleanly so all deferred
-		// cleanup (ledger close, lock release, state clear) runs correctly.
-		select {
-		case stopCh <- struct{}{}:
-		default:
+		slog.Warn("default api port unavailable, falling back to random port", "error", err)
+		listener, err = net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			slog.Error("failed to start daemon listener", "error", err)
+			// Signal the main goroutine to shut down cleanly so all deferred
+			// cleanup (ledger close, lock release, state clear) runs correctly.
+			select {
+			case stopCh <- struct{}{}:
+			default:
+			}
+			// Send 0 to unblock daemon.go which is waiting on <-apiPortCh.
+			apiPortCh <- 0
+			return
 		}
-		// Send 0 to unblock daemon.go which is waiting on <-apiPortCh.
-		apiPortCh <- 0
-		return
 	}
 
 	apiPort := listener.Addr().(*net.TCPAddr).Port

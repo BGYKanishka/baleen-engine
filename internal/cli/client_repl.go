@@ -532,6 +532,6 @@ func printClientWelcome(state service.ServiceState) {
 	fmt.Println("  prune                                - Clean up old docker images")
 	fmt.Println("  logs                                 - View recent daemon logs")
 	fmt.Println("  clean-logs [-rm]                     - Truncate daemon log (use -rm to delete)")
-	fmt.Println("  stop                                 - Stop the background service and exit")
+	fmt.Println("  stop                                 - Stop the engine and exit")
 	fmt.Println("  exit                                 - Disconnect CLI (engine keeps running)")
 }

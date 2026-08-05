@@ -165,7 +165,7 @@ export default function App() {
           {/* Running indicator */}
           <span className="flex items-center gap-2 text-sm font-medium text-green-400">
             <span className="h-2 w-2 bg-green-400 rounded-full animate-pulse" />
-            Running (Port {port}) - {displayName}
+            Running - {displayName}
           </span>
 
           {/* Stop is the only control when running */}

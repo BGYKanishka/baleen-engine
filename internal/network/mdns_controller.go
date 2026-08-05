@@ -87,6 +87,9 @@ func (nc *NetworkController) SetDiscovery(enabled bool) {
 	prev := nc.discoveryEnabled.Swap(enabled)
 	if prev != enabled {
 		slog.Info("mDNS discovery toggled", "enabled", enabled)
+		if !enabled && nc.registry != nil {
+			nc.registry.ClearMDNSPeers()
+		}
 	}
 }
 
