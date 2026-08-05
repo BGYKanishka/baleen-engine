@@ -5,23 +5,55 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
+	"sync"
 )
+
+type lineWriter struct {
+	isErr bool
+	buf   []byte
+	mu    sync.Mutex
+}
+
+func (w *lineWriter) Write(p []byte) (n int, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.buf = append(w.buf, p...)
+	for {
+		idx := bytes.IndexAny(w.buf, "\r\n")
+		if idx == -1 {
+			break
+		}
+		line := w.buf[:idx]
+		w.buf = w.buf[idx+1:] // Skip the \r or \n
+		if len(line) > 0 {
+			if w.isErr {
+				slog.Warn(string(line))
+			} else {
+				slog.Info(string(line))
+			}
+		}
+	}
+	return len(p), nil
+}
 
 func (m *Manager) silentlyResolveArchitecture(imageName string, targetPlatform string, buildContext string) (string, error) {
 	tempExportTag := fmt.Sprintf("%s-baleen-tmp", imageName)
 
 	slog.Info("architecture mismatch detected, cross-compiling", "image", imageName, "target", targetPlatform)
 
-	// Added --progress=quiet to hide noisy BuildKit output
-	cmd := exec.Command("docker", "buildx", "build", "--progress=quiet", "--platform", targetPlatform, "-t", tempExportTag, "--load", buildContext)
+	cmd := exec.Command("docker", "buildx", "build", "--progress=plain", "--platform", targetPlatform, "-t", tempExportTag, "--load", buildContext)
 
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
+	cmd.Stdout = &lineWriter{isErr: false}
+	cmd.Stderr = &lineWriter{isErr: true}
 
-	if err := cmd.Run(); err != nil {
-		// Only show the Docker output if it fails!
-		slog.Error("cross-compilation failed", "details", out.String())
+	if err := cmd.Start(); err != nil {
+		slog.Error("failed to start cross-compilation", "error", err)
+		return "", fmt.Errorf("autonomous cross-compilation failed: %w", err)
+	}
+
+	if err := cmd.Wait(); err != nil {
+		slog.Error("cross-compilation failed", "error", err)
 		return "", fmt.Errorf("autonomous cross-compilation failed: %w", err)
 	}
 

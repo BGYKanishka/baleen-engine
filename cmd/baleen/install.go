@@ -125,3 +125,53 @@ func copyFile(src, dst string) error {
 	_, err = io.Copy(destFile, sourceFile)
 	return err
 }
+
+func AutoUpdateCLIPlugin() {
+	exePath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	exePath, err = filepath.EvalSymlinks(exePath)
+	if err != nil {
+		return
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+
+	targetDir := filepath.Join(homeDir, ".docker", "cli-plugins")
+	targetFileName := "docker-baleen"
+	if runtime.GOOS == "windows" {
+		targetFileName += ".exe"
+	}
+	targetPath := filepath.Join(targetDir, targetFileName)
+
+	if exePath == targetPath {
+		return
+	}
+
+	srcInfo, err1 := os.Stat(exePath)
+	dstInfo, err2 := os.Stat(targetPath)
+
+	if err1 == nil && err2 == nil {
+		if srcInfo.Size() == dstInfo.Size() {
+			return
+		}
+	}
+
+	os.MkdirAll(targetDir, 0755)
+
+	if runtime.GOOS == "windows" {
+		os.Remove(targetPath + ".old")
+		os.Rename(targetPath, targetPath+".old")
+	}
+
+	if err := copyFile(exePath, targetPath); err == nil {
+		os.Chmod(targetPath, 0755)
+		if runtime.GOOS == "darwin" {
+			exec.Command("codesign", "-s", "-", targetPath).Run()
+		}
+	}
+}

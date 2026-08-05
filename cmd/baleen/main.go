@@ -7,6 +7,7 @@ import (
 
 // Select the appropriate subcommand based on the first argument.
 func main() {
+	go AutoUpdateCLIPlugin()
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "status":

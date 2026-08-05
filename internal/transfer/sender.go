@@ -16,7 +16,7 @@ import (
 )
 
 // connects to the remote node, negotiates a delta transfer, and streams the pruned payload
-func PushImage(targetIP string, port int, fingerprint string, filePath string, imageName string, hash string, author string, imageArch string, tlsConfig *tls.Config) error {
+func PushImage(targetIP string, port int, fingerprint string, filePath string, imageName string, hash string, author string, imageArch string, tlsConfig *tls.Config, peerName string) error {
 	fileSize, layers, err := inspectTarball(filePath)
 	if err != nil {
 		return err
@@ -32,7 +32,7 @@ func PushImage(targetIP string, port int, fingerprint string, filePath string, i
 	decoder := json.NewDecoder(conn)
 
 	// Publish pre-streaming status.
-	PublishStatus(imageName, targetIP, "push", "waiting for approval")
+	PublishStatus(imageName, peerName, "push", "waiting for approval")
 
 	// Register a cancellable pending connection for the approval phase.
 	pending := &PendingTransfer{
@@ -41,16 +41,16 @@ func PushImage(targetIP string, port int, fingerprint string, filePath string, i
 			SendControlMessage(targetIP, port, fingerprint, imageName, author, action, initiator, tlsConfig)
 		},
 	}
-	GlobalManager.RegisterPendingConn(imageName, targetIP, pending)
-	defer GlobalManager.UnregisterPendingConn(imageName, targetIP)
+	GlobalManager.RegisterPendingConn(imageName, peerName, pending)
+	defer GlobalManager.UnregisterPendingConn(imageName, peerName)
 
 	missingLayers, err := negotiate(encoder, decoder, imageName, hash, author, imageArch, fileSize, layers)
 	if err != nil {
-		PublishStatus(imageName, targetIP, "push", "rejected")
+		PublishStatus(imageName, peerName, "push", "rejected")
 		return err
 	}
 
-	PublishStatus(imageName, targetIP, "push", "pruning")
+	PublishStatus(imageName, peerName, "push", "pruning")
 
 	prunedPath, prunedHash, err := pruneAndHash(filePath, layers, missingLayers)
 	if err != nil {
@@ -58,7 +58,7 @@ func PushImage(targetIP string, port int, fingerprint string, filePath string, i
 	}
 	defer os.Remove(prunedPath)
 
-	return streamPayload(encoder, conn, prunedPath, prunedHash, targetIP, imageName, author, port, fingerprint, tlsConfig)
+	return streamPayload(encoder, conn, prunedPath, prunedHash, targetIP, peerName, imageName, author, port, fingerprint, tlsConfig)
 }
 
 // opens the tarball, reads its size and layer digests
@@ -181,7 +181,7 @@ func pruneAndHash(filePath string, layers []string, missingLayers []string) (str
 
 // sends the stream header then copies the pruned file.
 func streamPayload(encoder *json.Encoder, conn *tls.Conn, prunedPath string, prunedHash string,
-	targetIP string, image string, author string, peerPort int, peerFingerprint string, tlsConfig *tls.Config) error {
+	targetIP string, peerName string, image string, author string, peerPort int, peerFingerprint string, tlsConfig *tls.Config) error {
 	info, err := os.Stat(prunedPath)
 	if err != nil {
 		return fmt.Errorf("failed to stat pruned file: %w", err)
@@ -203,7 +203,7 @@ func streamPayload(encoder *json.Encoder, conn *tls.Conn, prunedPath string, pru
 	}
 	defer prunedFile.Close()
 
-	pw := newProgressWriter(conn, info.Size(), image, targetIP, "push")
+	pw := newProgressWriter(conn, info.Size(), image, peerName, "push")
 	// notify the receiver of control actions via a fresh connection
 	pw.notifyPeer = func(action, initiator string) {
 		SendControlMessage(targetIP, peerPort, peerFingerprint, image, author, action, initiator, tlsConfig)
@@ -242,7 +242,7 @@ func streamPayload(encoder *json.Encoder, conn *tls.Conn, prunedPath string, pru
 		GlobalHub.Publish(ProgressEvent{
 			Direction: "push",
 			Image:     image,
-			Peer:      targetIP,
+			Peer:      peerName,
 			Progress:  pw.currentProgress(),
 			Speed:     "",
 			Status:    "failed",
@@ -258,7 +258,7 @@ func streamPayload(encoder *json.Encoder, conn *tls.Conn, prunedPath string, pru
 	GlobalHub.Publish(ProgressEvent{
 		Direction: "push",
 		Image:     image,
-		Peer:      targetIP,
+		Peer:      peerName,
 		Progress:  100,
 		Speed:     "0.00 MB/s",
 		Status:    "completed",

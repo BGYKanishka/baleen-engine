@@ -44,6 +44,14 @@ if (-not (Test-Path $PluginDir)) {
 }
 Copy-Item "build\docker-baleen.exe" -Destination "$PluginDir\docker-baleen.exe" -Force
 
+Write-Host "Cross-compiling binaries for Docker Extension..."
+$env:GOOS="darwin"; $env:GOARCH="amd64"; go build -o build/baleen-darwin-amd64 ./cmd/baleen
+$env:GOOS="darwin"; $env:GOARCH="arm64"; go build -o build/baleen-darwin-arm64 ./cmd/baleen
+$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o build/baleen-linux-amd64 ./cmd/baleen
+$env:GOOS="linux"; $env:GOARCH="arm64"; go build -o build/baleen-linux-arm64 ./cmd/baleen
+$env:GOOS="windows"; $env:GOARCH="amd64"; go build -o build/baleen-windows-amd64.exe ./cmd/baleen
+$env:GOOS=""; $env:GOARCH=""
+
 Write-Host "Building Docker Extension image..."
 docker build -t baleen-extension:latest .
 
