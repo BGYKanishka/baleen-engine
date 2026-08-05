@@ -3,6 +3,15 @@ set -e
 
 echo "Welcome to Baleen Engine Installer"
 
+echo "Stopping any existing Baleen daemon processes..."
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+    taskkill //F //IM baleen.exe //T > /dev/null 2>&1 || true
+    taskkill //F //IM docker-baleen.exe //T > /dev/null 2>&1 || true
+else
+    pkill -f "baleen daemon" || true
+    pkill -f "docker-baleen daemon" || true
+fi
+
 # Detect OS to handle Windows (.exe) differences
 EXE_EXT=""
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then

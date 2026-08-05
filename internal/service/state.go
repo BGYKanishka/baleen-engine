@@ -96,3 +96,27 @@ func WaitForReady(timeout time.Duration) (ServiceState, error) {
 
 // error returned when the service is already running and cannot be started again.
 var ErrAlreadyRunning = errors.New("baleen daemon is already running")
+
+// checks if the service is already running and returns ErrAlreadyRunning if so.
+func KillIfOutdated(state ServiceState) bool {
+	if state.PID <= 0 {
+		return false
+	}
+	exePath, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	info, err := os.Stat(exePath)
+	if err != nil {
+		return false
+	}
+
+	// If the executable has been modified after the service started, kill the old process.
+	if info.ModTime().After(state.StartedAt.Add(time.Second)) {
+		if proc, err := os.FindProcess(state.PID); err == nil {
+			proc.Kill()
+			return true
+		}
+	}
+	return false
+}

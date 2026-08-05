@@ -11,6 +11,11 @@ import (
 // It is invoked by the `baleen status` command.
 func runStatus() {
 	if existing, err := service.ReadState(); err == nil && service.IsAlive(existing) {
+		if service.KillIfOutdated(existing) {
+			fmt.Println(`{"status":"stopped"}`)
+			return
+		}
+
 		out := map[string]any{
 			"status":    "running",
 			"port":      existing.Port,
