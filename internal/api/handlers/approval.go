@@ -38,6 +38,11 @@ func sendDecision(ctx cli.EngineContext, w http.ResponseWriter, approved bool) {
 		return
 	}
 	ctx.PendingApproval.Clear()
-	req.Response <- approved
+	
+	select {
+	case req.Response <- approved:
+	default:
+	}
+	
 	w.WriteHeader(http.StatusOK)
 }

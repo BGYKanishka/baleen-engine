@@ -2,6 +2,7 @@ package transfer
 
 import (
 	"encoding/json"
+	"sort"
 	"sync"
 	"time"
 )
@@ -52,6 +53,13 @@ func (h *Hub) GetAll() []byte {
 		result = append(result, *v)
 	}
 	h.mu.Unlock()
+
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Image != result[j].Image {
+			return result[i].Image < result[j].Image
+		}
+		return result[i].Peer < result[j].Peer
+	})
 
 	data, _ := json.Marshal(result)
 	return data

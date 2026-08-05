@@ -22,7 +22,7 @@ func ResolveAndDetect(ctx EngineContext, peer string) (ip string, port int, fing
 
 // writes the export to the ledger then streams it to the target node.
 func RecordAndPush(ctx EngineContext, exportedPath, image, arch, targetIP string, targetPort int, fingerprint string, tempID string, peerName string) {
-	fmt.Printf("Streaming image to disk at: %s\n", exportedPath)
+	slog.Info("Streaming image to disk", "path", exportedPath)
 
 	hash, err := ledger.GenerateHash(exportedPath)
 	if err != nil {

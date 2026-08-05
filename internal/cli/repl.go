@@ -37,29 +37,38 @@ type EngineContext struct {
 }
 
 type PendingApprovalStore struct {
-	mu  sync.Mutex
-	val *transfer.ApprovalRequest
+	mu    sync.Mutex
+	queue []transfer.ApprovalRequest
 }
 
 func (s *PendingApprovalStore) Store(r transfer.ApprovalRequest) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.val = &r
+	s.queue = append(s.queue, r)
 }
 
 func (s *PendingApprovalStore) Load() (transfer.ApprovalRequest, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.val == nil {
-		return transfer.ApprovalRequest{}, false
+	
+	for len(s.queue) > 0 {
+		req := s.queue[0]
+		// Skip any requests that were already cancelled/resolved
+		if len(req.Response) > 0 {
+			s.queue = s.queue[1:]
+		} else {
+			return req, true
+		}
 	}
-	return *s.val, true
+	return transfer.ApprovalRequest{}, false
 }
 
 func (s *PendingApprovalStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.val = nil
+	if len(s.queue) > 0 {
+		s.queue = s.queue[1:]
+	}
 }
 
 func Start(ctx EngineContext) {

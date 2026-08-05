@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"sort"
 	"strings"
@@ -52,6 +53,10 @@ func Peers(ctx cli.EngineContext) http.HandlerFunc {
 				IP string `json:"ip"`
 			}
 			json.NewDecoder(r.Body).Decode(&payload)
+			if _, _, err := net.SplitHostPort(payload.IP); err != nil {
+				http.Error(w, "invalid IP/port format", http.StatusBadRequest)
+				return
+			}
 			ctx.PeerRegistry.AddCustomPeer(fmt.Sprintf("manual-%d", time.Now().Unix()), payload.IP, "manual")
 			w.WriteHeader(http.StatusCreated)
 
