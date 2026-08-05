@@ -45,7 +45,7 @@ func RecordAndPush(ctx EngineContext, exportedPath, image, arch, targetIP string
 		Status:    "Pending",
 	})
 
-	pushErr := transfer.PushImage(targetIP, targetPort, fingerprint, exportedPath, image, hash, ctx.GetNodeName(), arch, ctx.TLSConfig)
+	pushErr := transfer.PushImage(targetIP, targetPort, fingerprint, exportedPath, image, hash, ctx.GetNodeName(), arch, ctx.TLSConfig, peerName)
 
 	if pushErr != nil {
 		slog.Error("push failed", "error", pushErr)

@@ -9,7 +9,7 @@ func TestPeerRegistry_AddPeer(t *testing.T) {
 	pr := NewPeerRegistry()
 
 	pr.AddPeer("node-1", "192.168.1.10:8080", "fingerprint1")
-	
+
 	peers := pr.GetAllPeers()
 	if len(peers) != 1 || peers["node-1"] != "192.168.1.10:8080" {
 		t.Fatalf("expected node-1 to be added, got: %v", peers)
@@ -32,7 +32,7 @@ func TestPeerRegistry_AddPeer(t *testing.T) {
 	if peers["node-1-renamed"] != "192.168.1.10:8080" {
 		t.Fatalf("expected node-1-renamed, got: %v", peers)
 	}
-	
+
 	details = pr.GetDetailedPeers()
 	if _, exists := details["node-1"]; exists {
 		t.Error("node-1 metadata should have been deleted")
@@ -43,7 +43,7 @@ func TestPeerRegistry_AddCustomPeer(t *testing.T) {
 	pr := NewPeerRegistry()
 
 	pr.AddCustomPeer("manual-node", "10.0.0.5:9090", "manual")
-	
+
 	details := pr.GetDetailedPeers()
 	if len(details) != 1 {
 		t.Fatalf("expected 1 peer, got %d", len(details))
@@ -83,7 +83,7 @@ func TestPeerRegistry_ClearMDNSPeers(t *testing.T) {
 	if _, exists := peers["static-node"]; !exists {
 		t.Error("static-node should NOT have been cleared")
 	}
-	
+
 	details := pr.GetDetailedPeers()
 	if _, exists := details["mdns-node"]; exists {
 		t.Error("mdns-node metadata should have been cleared")
@@ -93,13 +93,13 @@ func TestPeerRegistry_ClearMDNSPeers(t *testing.T) {
 func TestPeerRegistry_RemovePeer(t *testing.T) {
 	pr := NewPeerRegistry()
 	pr.AddPeer("node-1", "192.168.1.10:8080", "fp")
-	
+
 	if len(pr.GetAllPeers()) != 1 {
 		t.Fatal("expected 1 peer")
 	}
 
 	pr.RemovePeer("node-1")
-	
+
 	if len(pr.GetAllPeers()) != 0 {
 		t.Fatal("expected 0 peers after removal")
 	}

@@ -59,6 +59,13 @@ mkdir -p "${PLUGIN_DIR}"
 cp build/docker-baleen${EXE_EXT} "${PLUGIN_DIR}/docker-baleen${EXE_EXT}"
 chmod +x "${PLUGIN_DIR}/docker-baleen${EXE_EXT}" || true
 
+echo "Cross-compiling binaries for Docker Extension..."
+GOOS=darwin GOARCH=amd64 go build -o build/baleen-darwin-amd64 ./cmd/baleen
+GOOS=darwin GOARCH=arm64 go build -o build/baleen-darwin-arm64 ./cmd/baleen
+GOOS=linux GOARCH=amd64 go build -o build/baleen-linux-amd64 ./cmd/baleen
+GOOS=linux GOARCH=arm64 go build -o build/baleen-linux-arm64 ./cmd/baleen
+GOOS=windows GOARCH=amd64 go build -o build/baleen-windows-amd64.exe ./cmd/baleen
+
 echo "Building Docker Extension image..."
 docker build -t baleen-extension:latest .
 

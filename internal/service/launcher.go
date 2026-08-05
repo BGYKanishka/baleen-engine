@@ -2,9 +2,11 @@ package service
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 
 	"github.com/BGYKanishka/baleen-engine/internal/config"
 )
@@ -28,6 +30,23 @@ func daemonLogPath() (string, error) {
 	return filepath.Join(baleenRoot, "daemon.log"), nil
 }
 
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	return err
+}
+
 // LaunchBackground launches the background daemon process, which will run
 // independently of the current process. The daemon will write its logs to a
 // file in the user's home directory.
@@ -35,6 +54,27 @@ func LaunchBackground(token string, name string) error {
 	exePath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("resolve executable path: %w", err)
+	}
+
+	if runtime.GOOS == "windows" {
+		baleenRoot, err := config.BaleenDir()
+		if err == nil {
+			binDir := filepath.Join(baleenRoot, "bin")
+			os.MkdirAll(binDir, 0755)
+
+			if files, err := os.ReadDir(binDir); err == nil {
+				for _, f := range files {
+					if filepath.Ext(f.Name()) == ".exe" {
+						os.Remove(filepath.Join(binDir, f.Name()))
+					}
+				}
+			}
+
+			newExePath := filepath.Join(binDir, fmt.Sprintf("baleen-%d.exe", os.Getpid()))
+			if err := copyFile(exePath, newExePath); err == nil {
+				exePath = newExePath
+			}
+		}
 	}
 
 	logPath, err := daemonLogPath()

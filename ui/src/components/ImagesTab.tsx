@@ -52,32 +52,32 @@ export default function ImagesTab({ port, token, ddClient }: { port: number; tok
         let archMap: Record<string, string> = {};
 
         if (uniqueIds.length > 0) {
-           const chunkSize = 50;
-           const chunkPromises = [];
+          const chunkSize = 50;
+          const chunkPromises = [];
 
-           for (let i = 0; i < uniqueIds.length; i += chunkSize) {
-             const chunk = uniqueIds.slice(i, i + chunkSize);
-             chunkPromises.push((async () => {
-               try {
-                  const inspectRes = await ddClient.docker.cli.exec('inspect', chunk as string[]);
-                  const inspectData = JSON.parse(inspectRes.stdout);
-                  inspectData.forEach((data: any) => {
-                     archMap[data.Id] = data.Architecture;
-                  });
-               } catch (e) {
-                  console.error("Failed to inspect chunk of images", e);
-               }
-             })());
-           }
-           
-           await Promise.all(chunkPromises);
+          for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+            const chunk = uniqueIds.slice(i, i + chunkSize);
+            chunkPromises.push((async () => {
+              try {
+                const inspectRes = await ddClient.docker.cli.exec('inspect', chunk as string[]);
+                const inspectData = JSON.parse(inspectRes.stdout);
+                inspectData.forEach((data: any) => {
+                  archMap[data.Id] = data.Architecture;
+                });
+              } catch (e) {
+                console.error("Failed to inspect chunk of images", e);
+              }
+            })());
+          }
 
-           // 3. Update State with Architectures
-           setImages(prevImages => prevImages.map(img => {
-             const arch = img.id && archMap[img.id] ? archMap[img.id] : 'unknown';
-             const isMismatch = arch !== 'unknown' && arch !== hostArch && arch !== '...';
-             return { ...img, arch, isMismatch };
-           }));
+          await Promise.all(chunkPromises);
+
+          // 3. Update State with Architectures
+          setImages(prevImages => prevImages.map(img => {
+            const arch = img.id && archMap[img.id] ? archMap[img.id] : 'unknown';
+            const isMismatch = arch !== 'unknown' && arch !== hostArch && arch !== '...';
+            return { ...img, arch, isMismatch };
+          }));
         }
       } catch (err) {
         console.error('Failed to fetch native docker images', err);
