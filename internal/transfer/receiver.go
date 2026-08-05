@@ -76,10 +76,12 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	decoder := json.NewDecoder(conn)
 	encoder := json.NewEncoder(conn)
 
+	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	var req TransferRequest
 	if err := decoder.Decode(&req); err != nil {
 		return
 	}
+	conn.SetReadDeadline(time.Time{})
 
 	if req.IsControl {
 		switch req.Action {

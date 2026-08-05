@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -13,7 +15,7 @@ import (
 )
 
 // StartDaemonServer starts the HTTP API server for the daemon, listening on a random localhost port.
-func StartDaemonServer(ctx cli.EngineContext, token string, stopCh chan<- struct{}, apiPortCh chan<- int) {
+func StartDaemonServer(daemonCtx context.Context, ctx cli.EngineContext, token string, stopCh chan<- struct{}, apiPortCh chan<- int) {
 	lastActive = time.Now()
 	go func() {
 		for approval := range ctx.ApprovalChan {
@@ -83,7 +85,15 @@ func StartDaemonServer(ctx cli.EngineContext, token string, stopCh chan<- struct
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		slog.Error("failed to start daemon listener", "error", err)
-		os.Exit(1)
+		// Signal the main goroutine to shut down cleanly so all deferred
+		// cleanup (ledger close, lock release, state clear) runs correctly.
+		select {
+		case stopCh <- struct{}{}:
+		default:
+		}
+		// Send 0 to unblock daemon.go which is waiting on <-apiPortCh.
+		apiPortCh <- 0
+		return
 	}
 
 	apiPort := listener.Addr().(*net.TCPAddr).Port
@@ -97,7 +107,20 @@ func StartDaemonServer(ctx cli.EngineContext, token string, stopCh chan<- struct
 	fmt.Printf(`{"status": "ready", "port": %d}`+"\n", apiPort)
 	os.Stdout.Sync()
 
-	http.Serve(listener, handler)
+	srv := &http.Server{Handler: handler}
+	// Graceful shutdown: when the daemon context is cancelled (SIGINT, SIGTERM,
+	// or /api/stop), give in-flight requests up to 5 seconds to complete.
+	go func() {
+		<-daemonCtx.Done()
+		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(shutCtx); err != nil {
+			slog.Error("HTTP server shutdown error", "error", err)
+		}
+	}()
+	if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		slog.Error("HTTP server stopped unexpectedly", "error", err)
+	}
 }
 
 // wraps any handler to update the idle timer on each request.

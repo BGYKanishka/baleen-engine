@@ -2,6 +2,7 @@ package transfer
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -23,7 +24,7 @@ type progressWriter struct {
 
 	paused   atomic.Bool
 	canceled atomic.Bool
-
+	mu       sync.Mutex
 	// pausedBy: "sender" | "receiver" | "" — only that side may resume
 	pausedBy string
 
@@ -134,7 +135,9 @@ func (pw *progressWriter) Pause(initiator string) {
 		return
 	}
 	pw.paused.Store(true)
+	pw.mu.Lock()
 	pw.pausedBy = initiator
+	pw.mu.Unlock()
 	pw.publishStatus("paused", pw.currentProgress(), "")
 	if pw.isLocalInitiator(initiator) {
 		pw.signalPeer('P', "pause", initiator)
@@ -146,12 +149,15 @@ func (pw *progressWriter) Resume(requester string) error {
 	if pw.canceled.Load() {
 		return fmt.Errorf("transfer was cancelled")
 	}
+	pw.mu.Lock()
 	if pw.pausedBy != "" && pw.pausedBy != requester {
+		pw.mu.Unlock()
 		return fmt.Errorf("only the %s can resume this paused transfer", pw.pausedBy)
 	}
 
 	prevPausedBy := pw.pausedBy
 	pw.pausedBy = ""
+	pw.mu.Unlock()
 
 	if pw.paused.Load() {
 		pw.paused.Store(false)
@@ -187,13 +193,17 @@ func (pw *progressWriter) Cancel() {
 
 // updates UI status to "paused" without blocking io.Copy (remote paused).
 func (pw *progressWriter) NotifyPausedBy(initiator string) {
+	pw.mu.Lock()
 	pw.pausedBy = initiator
+	pw.mu.Unlock()
 	pw.publishStatus("paused", pw.currentProgress(), "")
 }
 
 // clears the paused state on a status-only basis (remote resumed).
 func (pw *progressWriter) NotifyResumed() {
+	pw.mu.Lock()
 	pw.pausedBy = ""
+	pw.mu.Unlock()
 	pw.publishStatus("transferring", pw.currentProgress(), "")
 }
 

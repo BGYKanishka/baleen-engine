@@ -81,7 +81,8 @@ func (l *Ledger) RecordCommit(commit Commit) error {
 		if err != nil {
 			return err
 		}
-		return bucket.Put([]byte(commit.Hash), commitJSON)
+		key := commit.Timestamp + "|" + commit.Hash
+		return bucket.Put([]byte(key), commitJSON)
 	})
 }
 
@@ -149,16 +150,19 @@ func (l *Ledger) DeleteCommit(hashPrefix string) error {
 		if bucket == nil {
 			return nil
 		}
-		if bucket.Get([]byte(hashPrefix)) != nil {
-			return bucket.Delete([]byte(hashPrefix))
-		}
 		prefixBytes := []byte(hashPrefix)
 		c := bucket.Cursor()
 
-		for k, _ := c.Seek(prefixBytes); k != nil && bytes.HasPrefix(k, prefixBytes); k, _ = c.Next() {
-			return c.Delete()
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			parts := bytes.SplitN(k, []byte("|"), 2)
+			hashPart := k
+			if len(parts) == 2 {
+				hashPart = parts[1]
+			}
+			if bytes.HasPrefix(hashPart, prefixBytes) {
+				return c.Delete()
+			}
 		}
-
 		return fmt.Errorf("no commit found starting with '%s'", hashPrefix)
 	})
 }

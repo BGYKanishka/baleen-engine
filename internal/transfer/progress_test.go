@@ -81,6 +81,9 @@ func TestProgressWriter_PauseResume(t *testing.T) {
 	case <-time.After(50 * time.Millisecond):
 		t.Fatal("Write still blocked after resume")
 	}
+	// signalPeer fires the notifyPeer callback in a goroutine;
+	// give it a moment to land before checking collected signals.
+	time.Sleep(50 * time.Millisecond)
 
 	mu.Lock()
 	if len(signals) != 2 || signals[0] != "pause" || signals[1] != "resume" {
@@ -148,13 +151,19 @@ func TestProgressWriter_Notify(t *testing.T) {
 	defer pw.Cleanup()
 
 	pw.NotifyPausedBy("receiver")
-	if pw.pausedBy != "receiver" {
-		t.Errorf("expected pausedBy 'receiver', got %s", pw.pausedBy)
+	pw.mu.Lock()
+	got := pw.pausedBy
+	pw.mu.Unlock()
+	if got != "receiver" {
+		t.Errorf("expected pausedBy 'receiver', got %s", got)
 	}
 
 	pw.NotifyResumed()
-	if pw.pausedBy != "" {
-		t.Errorf("expected pausedBy '', got %s", pw.pausedBy)
+	pw.mu.Lock()
+	got = pw.pausedBy
+	pw.mu.Unlock()
+	if got != "" {
+		t.Errorf("expected pausedBy '', got %s", got)
 	}
 }
 

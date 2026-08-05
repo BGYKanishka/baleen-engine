@@ -191,11 +191,13 @@ func runDaemon(args []string) {
 
 	// StartDaemonServer binds its own random HTTP listener.
 	apiPortCh := make(chan int, 1)
-	go api.StartDaemonServer(cliContext, daemonToken, stopCh, apiPortCh)
-
+	go api.StartDaemonServer(ctx, cliContext, daemonToken, stopCh, apiPortCh)
 	// Block until the HTTP API is ready.
 	apiPort := <-apiPortCh
-
+	if apiPort == 0 {
+		slog.Error("daemon API server failed to bind, shutting down")
+		return
+	}
 	if err := service.WriteState(service.ServiceState{
 		Port:      apiPort,
 		Token:     daemonToken,
