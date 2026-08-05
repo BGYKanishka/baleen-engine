@@ -24,6 +24,7 @@ import (
 type DownloadResult struct {
 	Path      string
 	ImageName string
+	Peer      string
 }
 
 var isHex = regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString
@@ -161,6 +162,10 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	if err != nil {
 		slog.Error("error occurred", "error", err)
 		os.Remove(targetPath)
+		GlobalHub.Publish(ProgressEvent{
+			Direction: "pull", Image: req.ImageName, Peer: req.Author,
+			Progress: 100, Speed: "", Status: "failed",
+		})
 		recordCommitWithStatus(req, engineLedger, ParseErrorToStatus(err))
 		return
 	}
@@ -175,6 +180,7 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 	downloadedChan <- DownloadResult{
 		Path:      reconstructedPath,
 		ImageName: req.ImageName,
+		Peer:      req.Author,
 	}
 }
 
@@ -260,10 +266,10 @@ func downloadPayload(decoder *json.Decoder, conn net.Conn, incomingDir string, i
 		return "", fmt.Errorf("file stream failed: %w", err)
 	}
 
-	//publish completed
+	//publish unpacking
 	GlobalHub.Publish(ProgressEvent{
 		Direction: "pull", Image: image, Peer: peer,
-		Progress: 100, Speed: "0.00 MB/s", Status: "completed",
+		Progress: 100, Speed: "0.00 MB/s", Status: "unpacking",
 	})
 
 	slog.Info("verifying payload integrity")

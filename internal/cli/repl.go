@@ -130,11 +130,19 @@ func feedInput(rl *readline.Instance, inputChan chan string, syncChan chan struc
 // loads a received image tarball into the local Docker daemon.
 func handleDownload(result transfer.DownloadResult, rl *readline.Instance, ctx EngineContext) {
 	fmt.Println("\nUnpacking and loading image into Docker Daemon...")
+	status := "completed"
 	if err := ctx.DockerManager.LoadAndTag(result.Path, result.ImageName); err != nil {
 		slog.Error("failed to load image into Docker", "error", err)
+		status = "failed"
 	} else {
 		fmt.Println("Image successfully loaded and tagged! (Type 'docker images' in another terminal to verify)")
 	}
+
+	transfer.GlobalHub.Publish(transfer.ProgressEvent{
+		Direction: "pull", Image: result.ImageName, Peer: result.Peer,
+		Progress: 100, Speed: "0.00 MB/s", Status: status,
+	})
+
 	rl.Refresh()
 }
 

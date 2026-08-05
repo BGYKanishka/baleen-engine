@@ -75,6 +75,7 @@ export default function TransfersTab({ port, token }: { port: number; token: str
       case 'paused': return 'text-blue-600 dark:text-blue-400';
       case 'waiting for approval': return 'text-yellow-600 dark:text-yellow-400';
       case 'pruning': return 'text-yellow-600 dark:text-yellow-400';
+      case 'unpacking': return 'text-blue-600 dark:text-blue-400';
       case 'preparing':
       case 'exporting': return 'text-purple-600 dark:text-purple-400';
       default: return 'text-gray-600 dark:text-gray-400';
@@ -90,13 +91,14 @@ export default function TransfersTab({ port, token }: { port: number; token: str
       case 'paused': return 'bg-blue-400';
       case 'waiting for approval':
       case 'pruning': return 'bg-yellow-500';
+      case 'unpacking': return 'bg-blue-500';
       case 'preparing':
       case 'exporting': return 'bg-purple-500';
       default: return 'bg-blue-600';
     }
   }
 
-  const activeStatuses = ['transferring', 'paused', 'pruning', 'waiting for approval', 'preparing', 'exporting'];
+  const activeStatuses = ['transferring', 'paused', 'pruning', 'unpacking', 'waiting for approval', 'preparing', 'exporting'];
 
   return (
     <div className="space-y-4">
@@ -166,7 +168,7 @@ export default function TransfersTab({ port, token }: { port: number; token: str
               <div className="flex items-center gap-2 mt-1 pt-3 border-t border-gray-100 dark:border-gray-700">
 
                 {/* Pause / Resume */}
-                {t.status !== 'waiting for approval' && t.status !== 'pruning' && (
+                {t.status !== 'waiting for approval' && t.status !== 'pruning' && t.status !== 'unpacking' && (
                   t.status === 'paused' ? (
                     <button
                       id={`resume-${transferKey(t)}`}

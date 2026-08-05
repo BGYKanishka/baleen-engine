@@ -165,12 +165,19 @@ func runDaemon(args []string) {
 	go func() {
 		for result := range downloadedChan {
 			slog.Info("Unpacking and loading image into Docker Daemon...")
+			status := "completed"
 			if err := dockerManager.LoadAndTag(result.Path, result.ImageName); err != nil {
 				slog.Warn("Failed to load image into Docker", "error", err)
+				status = "failed"
 			} else {
 				slog.Info("Image successfully loaded into Docker!")
 				os.Remove(result.Path)
 			}
+
+			transfer.GlobalHub.Publish(transfer.ProgressEvent{
+				Direction: "pull", Image: result.ImageName, Peer: result.Peer,
+				Progress: 100, Speed: "0.00 MB/s", Status: status,
+			})
 		}
 	}()
 
