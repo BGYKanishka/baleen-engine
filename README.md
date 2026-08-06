@@ -20,6 +20,18 @@ Baleen Engine is a high-speed, local-first, peer-to-peer Docker image sharing en
 *   **Dual-Mode Interface:** Use the fully integrated Docker Desktop Extension UI, or the interactive CLI via `docker baleen`.
 *   **Cross-Platform Support:** Works on macOS, Linux, and Windows.
 
+## 📦 Installation
+
+Baleen Engine is distributed as a Docker Desktop Extension. Ensure you have Docker Desktop installed, then run the following command to install the extension:
+
+```bash
+docker extension install yehankanishka/baleen-engine:latest
+```
+
+> **Note:** If you receive an error, go to Docker Desktop **Settings > Extensions** and ensure that the **"Allow only extensions distributed through the Docker Marketplace"** option is **unchecked**.
+
+Once installed, Baleen will be available in the Extensions sidebar of your Docker Desktop application.
+
 ## ⚙️ Architecture Overview
 
 The Baleen "engine" serves as the core logic for this distributed distribution system. It leverages Go's concurrency model for maximum throughput during image extraction and export. 
