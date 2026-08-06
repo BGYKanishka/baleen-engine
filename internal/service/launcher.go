@@ -62,17 +62,24 @@ func LaunchBackground(token string, name string) error {
 			binDir := filepath.Join(baleenRoot, "bin")
 			os.MkdirAll(binDir, 0755)
 
-			if files, err := os.ReadDir(binDir); err == nil {
-				for _, f := range files {
-					if filepath.Ext(f.Name()) == ".exe" {
-						os.Remove(filepath.Join(binDir, f.Name()))
-					}
-				}
-			}
+			newExePath := filepath.Join(binDir, "baleen-daemon.exe")
+			oldExePath := filepath.Join(binDir, "baleen-daemon.old")
 
-			newExePath := filepath.Join(binDir, fmt.Sprintf("baleen-%d.exe", os.Getpid()))
+			os.Remove(oldExePath)
+			os.Rename(newExePath, oldExePath)
+
 			if err := copyFile(exePath, newExePath); err == nil {
 				exePath = newExePath
+			}
+
+			// Clean up leftover PID-based executables from previous versions
+			if files, err := os.ReadDir(binDir); err == nil {
+				for _, f := range files {
+					name := f.Name()
+					if name != "baleen-daemon.exe" && filepath.Ext(name) == ".exe" {
+						os.Remove(filepath.Join(binDir, name))
+					}
+				}
 			}
 		}
 	}
