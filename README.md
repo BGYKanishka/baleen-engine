@@ -38,7 +38,7 @@ The Baleen "engine" serves as the core logic for this distributed distribution s
 
 ```mermaid
 graph TD
-    %% Node Styling (Muted, professional colors)
+    %% Node Styling
     classDef ui fill:#dbeafe,stroke:#93c5fd,color:#1e3a8a;
     classDef core fill:#f1f5f9,stroke:#cbd5e1,color:#0f172a;
     classDef db fill:#fef3c7,stroke:#fcd34d,color:#451a03;
@@ -58,60 +58,75 @@ graph TD
             UI[Extension UI React]:::ui
         end
 
-        subgraph Core [Baleen Core Engine / Daemon]
-            Service[Service Manager]:::svc
-            API[API Daemon]:::core
-            EngineCtx[Engine Context]:::core
-            Net[Network & Discovery]:::core
-            Trans[Delta Sync Manager]:::core
-            Doc[Docker Integrator]:::core
-            Ledger[(State Ledger)]:::db
-            Config[Configuration Manager]:::core
-        end
-
+        DockerCLI[Docker CLI / buildx]:::ext
         Daemon[Local Docker Daemon]:::ext
+
+        subgraph Core [Baleen Core Engine / Daemon]
+            %% LEFT SIDE (Network & Sync)
+            API[API Daemon]:::core
+            Net[Network & Metadata]:::core
+            TransferHub[Progress Event Hub]:::core
+            Trans[Delta Sync Manager]:::core
+
+            %% CENTER
+            EngineCtx[Engine Context]:::core
+            Ledger[(State Ledger)]:::db
+
+            %% RIGHT SIDE (Storage & Local Host)
+            Service[Service Manager]:::svc
+            Config[Configuration Manager]:::core
+            GC[Storage Cleaner]:::core
+            Doc[Docker Integrator]:::core
+        end
     end
 
     subgraph RemoteMachine [Remote Environment]
         Peer[Remote Peer]:::ext
     end
 
-    %% UI & CLI connect to API via HTTP
-    UI --->|HTTP / SSE Bridge| API
-    CLI --->|HTTP| API
+    %% LEFT SIDE WIRING (Network & Sync)
+    CLI -->|HTTP REST| API
+    UI -->|HTTP REST| API
+    API --> EngineCtx
+    API -.-> TransferHub
 
-    %% CLI reads daemon state (port, token) from Service Manager
-    CLI -->|reads service.json| Service
-
-    %% Startup: Config & Service bootstrap the Engine Context
-    Config -->|paths & node name| EngineCtx
-    Service -->|state & lock| EngineCtx
-
-    %% EngineContext is injected into the API at startup (not the other way around)
-    EngineCtx -->|injected into| API
-
-    %% EngineContext wires all subsystems together
-    EngineCtx --> Doc
-    EngineCtx --> Ledger
     EngineCtx --> Net
+    EngineCtx -.-> TransferHub
     EngineCtx --> Trans
 
-    %% Transfer reads/writes Ledger for hashing and history
-    Trans --> Ledger
-
-    %% Docker Integrator talks to local Docker Daemon
-    Doc --->|Unix Socket / Named Pipe| Daemon
-
-    %% Network Connections
-    Net ---->|mDNS| Peer
+    Trans -.-> TransferHub
+    Net ---->|mDNS Broadcast & HTTP| Peer
     Trans ---->|TLS Delta Stream| Peer
+
+    %% CENTER CROSS-CONNECTIONS
+    Trans --> Ledger
+    Trans -.->|Transfer Result Channel| EngineCtx
+    Doc -.->|Exported Tarball Path| Trans
+
+    %% RIGHT SIDE WIRING (Storage & Local Host)
+    CLI -.-> Service
+    EngineCtx -.-> Service
+    Config --> EngineCtx
+
+    EngineCtx --> Ledger
+    API --> GC
+    EngineCtx --> Doc
+
+    GC --> Ledger
+
+    Doc ---->|Unix Socket / Named Pipe| Daemon
+    Doc ----> DockerCLI
+    
+    %% LAYOUT ENFORCEMENT
+
+    Ledger ~~~ Peer
 ```
 
 ## 🧩 Core Components
 
 The codebase is organized into modular packages located in the `internal/` directory, orchestrating the different responsibilities of the engine:
 
-*   **`api`**: Hosts the local HTTP daemon and Server-Sent Events (SSE) bridge. It serves as the primary interface for both the CLI and the Docker Desktop Extension UI.
+*   **`api`**: Hosts the local HTTP daemon, serving REST endpoints for state polling. It serves as the primary interface for both the CLI and the Docker Desktop Extension UI.
 *   **`cli`**: Provides the interactive Read-Eval-Print Loop (REPL) command-line interface, giving users terminal-based control over transfers and peer management.
 *   **`config`**: Manages user configuration, global application state, and configuration paths (`~/.baleen`).
 *   **`docker`**: Wraps the Docker Engine SDK. Handles the extraction, manipulation, and loading of container images directly via the local Docker daemon socket.
