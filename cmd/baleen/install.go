@@ -100,7 +100,8 @@ func runCheckCLI() {
 	targetPath := filepath.Join(targetDir, targetFileName)
 
 	// Check if the file exists
-	if _, err := os.Stat(targetPath); err == nil {
+	info, err := os.Stat(targetPath)
+	if err == nil && info.Size() > 0 {
 		fmt.Printf("Installed\n")
 		os.Exit(0)
 	} else {
@@ -156,7 +157,7 @@ func AutoUpdateCLIPlugin() {
 	dstInfo, err2 := os.Stat(targetPath)
 
 	if err1 == nil && err2 == nil {
-		if srcInfo.Size() == dstInfo.Size() {
+		if dstInfo.Size() > 0 && srcInfo.Size() == dstInfo.Size() {
 			return
 		}
 	}
