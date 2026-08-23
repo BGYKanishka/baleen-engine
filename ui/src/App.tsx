@@ -9,7 +9,7 @@ import LogsTab from './components/LogsTab';
 import ApprovalNotification from './components/ApprovalNotification';
 import NetworkSphere from './components/NetworkSphere';
 import SettingsSidebar from './components/SettingsSidebar';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 const ddClient = createDockerDesktopClient();
 
@@ -22,40 +22,6 @@ export default function App() {
     () => localStorage.getItem('baleen-custom-node-name') ?? ''
   );
   const displayName = customName || nodeName;
-  const [isInstalling, setIsInstalling] = useState(false);
-  const [isCliInstalled, setIsCliInstalled] = useState(false);
-
-  useEffect(() => {
-    const checkCliStatus = async () => {
-      try {
-        if (!ddClient.extension?.host) return;
-        await ddClient.extension.host.cli.exec('baleen', ['check-cli']);
-        setIsCliInstalled(true);
-      } catch (e) {
-        setIsCliInstalled(false);
-      }
-    };
-    checkCliStatus();
-  }, []);
-
-  const handleInstallCLI = async () => {
-    try {
-      setIsInstalling(true);
-      if (!ddClient.extension?.host) {
-        throw new Error("Extension host is not available");
-      }
-      const result = await ddClient.extension.host.cli.exec('baleen', ['install-cli']);
-      setIsCliInstalled(true);
-      // If the command succeeds, show a success toast
-      ddClient.desktopUI.toast.success("CLI installed! You can now run 'docker baleen' in your terminal.");
-    } catch (e: any) {
-      // e could contain e.stderr or e.message
-      const errText = e.stderr || e.stdout || e.message || String(e);
-      ddClient.desktopUI.toast.error(`Failed to install CLI: ${errText}`);
-    } finally {
-      setIsInstalling(false);
-    }
-  };
 
   // ── Checking / stopped ─────────────────────────────────────────────────
   if (status === 'checking' || status === 'stopped') {
@@ -152,16 +118,6 @@ export default function App() {
         </h1>
 
         <div className="flex items-center gap-4">
-          {!isCliInstalled && (
-            <button
-              onClick={handleInstallCLI}
-              disabled={isInstalling}
-              className="text-sm bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 px-3 py-1 rounded transition flex items-center gap-2"
-            >
-              {isInstalling ? 'Installing...' : 'Install Terminal CLI'}
-            </button>
-          )}
-
           {/* Running indicator */}
           <span className="flex items-center gap-2 text-sm font-medium text-green-400">
             <span className="h-2 w-2 bg-green-400 rounded-full animate-pulse" />

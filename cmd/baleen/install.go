@@ -3,111 +3,83 @@ package main
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
+
+	"github.com/BGYKanishka/baleen-engine/internal/service"
 )
 
-func runInstallCLI() {
-	// Find the current executable path
+func SelfCleanupIfExtensionRemoved() {
 	exePath, err := os.Executable()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to get executable path: %v\n", err)
-		os.Exit(1)
+		return
 	}
-
-	// Resolve any symlinks to get the real path
 	exePath, err = filepath.EvalSymlinks(exePath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to resolve executable symlinks: %v\n", err)
-		os.Exit(1)
+		return
 	}
 
-	// Find the user's home directory
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to get user home directory: %v\n", err)
-		os.Exit(1)
+		return
 	}
 
-	// Determine the target directory for Docker CLI plugins
-	targetDir := filepath.Join(homeDir, ".docker", "cli-plugins")
-	if runtime.GOOS == "windows" {
-		targetDir = filepath.Join(homeDir, ".docker", "cli-plugins")
+	pluginDir := filepath.Join(homeDir, ".docker", "cli-plugins")
+
+	if !strings.HasPrefix(exePath, pluginDir) {
+		return
 	}
 
-	// Ensure the target directory exists
-	err = os.MkdirAll(targetDir, 0755)
+	// Check if Docker CLI is available.
+	dockerPath, err := exec.LookPath("docker")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create directory %s: %v\n", targetDir, err)
-		os.Exit(1)
+		return // Can't verify — skip cleanup.
 	}
 
-	// Determine the target filename
-	targetFileName := "docker-baleen"
-	if runtime.GOOS == "windows" {
-		targetFileName += ".exe"
-	}
-	targetPath := filepath.Join(targetDir, targetFileName)
-
-	// Copy the executable
-	err = copyFile(exePath, targetPath)
+	// Run `docker extension ls` to see if the baleen extension is still installed.
+	cmd := exec.Command(dockerPath, "extension", "ls")
+	output, err := cmd.Output()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to install CLI to %s: %v\n", targetPath, err)
-		os.Exit(1)
+		return
+	}
+	if strings.Contains(strings.ToLower(string(output)), "baleen") {
+		return
 	}
 
-	// Make it executable
-	err = os.Chmod(targetPath, 0755)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to make %s executable: %v\n", targetPath, err)
-		os.Exit(1)
-	}
-
-	// Re-sign on macOS ARM64 to prevent SIGKILL (137)
-	if runtime.GOOS == "darwin" {
-		cmd := exec.Command("codesign", "-s", "-", targetPath)
-		if err := cmd.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to codesign binary: %v\n", err)
-			os.Exit(1)
+	// Stop the daemon if it's running.
+	if existing, err := service.ReadState(); err == nil && service.IsAlive(existing) {
+		stopURL := fmt.Sprintf("http://127.0.0.1:%d/api/stop", existing.Port)
+		req, err := http.NewRequest("POST", stopURL, nil)
+		if err == nil {
+			req.Header.Set("Authorization", "Bearer "+existing.Token)
+			client := &http.Client{}
+			client.Do(req)
 		}
 	}
 
-	fmt.Printf("Successfully installed CLI to %s\n", targetPath)
-	fmt.Printf("You can now use 'docker baleen' in your terminal.\n")
-}
+	// Clear the service state file.
+	service.ClearState()
 
-func runCheckCLI() {
-	// Find the user's home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to get user home directory: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Determine the target directory for Docker CLI plugins
-	targetDir := filepath.Join(homeDir, ".docker", "cli-plugins")
-	if runtime.GOOS == "windows" {
-		targetDir = filepath.Join(homeDir, ".docker", "cli-plugins")
-	}
-
-	// Determine the target filename
+	// Remove the CLI plugin binary.
 	targetFileName := "docker-baleen"
 	if runtime.GOOS == "windows" {
 		targetFileName += ".exe"
 	}
-	targetPath := filepath.Join(targetDir, targetFileName)
+	targetPath := filepath.Join(pluginDir, targetFileName)
 
-	// Check if the file exists
-	info, err := os.Stat(targetPath)
-	if err == nil && info.Size() > 0 {
-		fmt.Printf("Installed\n")
-		os.Exit(0)
+	if runtime.GOOS == "windows" {
+
+		os.Rename(targetPath, targetPath+".removed")
 	} else {
-		fmt.Fprintf(os.Stderr, "Not installed\n")
-		os.Exit(1)
+		os.Remove(targetPath)
 	}
+
+	fmt.Println("Baleen extension has been uninstalled. CLI plugin removed.")
+	os.Exit(0)
 }
 
 func copyFile(src, dst string) error {
