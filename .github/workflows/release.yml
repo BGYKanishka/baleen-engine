@@ -77,6 +77,12 @@ jobs:
         with:
           images: yehankanishka/baleen-engine
 
+      - name: Get Version Without V
+        id: version
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "val=$VERSION" >> $GITHUB_OUTPUT
+
       - name: Build and push Extension Image
         uses: docker/build-push-action@v5
         with:
@@ -84,4 +90,4 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: yehankanishka/baleen-engine:latest,yehankanishka/baleen-engine:${{ github.ref_name }}
+          tags: yehankanishka/baleen-engine:latest,yehankanishka/baleen-engine:${{ steps.version.outputs.val }}
