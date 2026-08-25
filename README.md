@@ -1,7 +1,9 @@
 
 # Baleen Engine 🐳
 
-Baleen Engine is a high-speed, local-first, peer-to-peer Docker image sharing engine. It completely bypasses cloud registries and internet bottlenecks, allowing you to synchronize Docker images directly between machines on your local network.
+Baleen Engine is a lightweight, local-first, peer-to-peer Docker image sharing tool designed for small teams and developers sharing a local network (like an office or a hackathon). 
+
+Built as an educational project to explore Go's concurrency model and the Docker Engine SDK, Baleen allows you to share Docker images directly between machines without needing to push to a cloud registry. It is not intended to replace enterprise local registries, but rather to provide a fast, P2P alternative for simple image synchronization among a few peers.
 
 <p align="center">
   <img src="./baleen-demo.svg" width="800" alt="Baleen Engine Delta Transfer Animation" />

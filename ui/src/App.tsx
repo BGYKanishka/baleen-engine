@@ -9,6 +9,7 @@ import LogsTab from './components/LogsTab';
 import ApprovalNotification from './components/ApprovalNotification';
 import NetworkSphere from './components/NetworkSphere';
 import SettingsSidebar from './components/SettingsSidebar';
+import UpdateBanner from './components/UpdateBanner';
 import { useState } from 'react';
 
 const ddClient = createDockerDesktopClient();
@@ -82,6 +83,7 @@ export default function App() {
   // ── Running ───────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-screen bg-transparent text-gray-900 dark:text-white overflow-hidden">
+      {port && <UpdateBanner port={port} token={token} />}
 
       {/* Settings sidebar */}
       <SettingsSidebar

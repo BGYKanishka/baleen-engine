@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/BGYKanishka/baleen-engine/internal/version"
 )
 
 // Select the appropriate subcommand based on the first argument.
@@ -18,7 +20,7 @@ func main() {
 			runDaemon(os.Args[2:])
 			return
 		case "docker-cli-plugin-metadata":
-			fmt.Println(`{"SchemaVersion":"0.1.0","Vendor":"Baleen","Version":"v1.0.0","ShortDescription":"Baleen P2P Image Sharing"}`)
+			fmt.Printf(`{"SchemaVersion":"0.1.0","Vendor":"Baleen","Version":"v%s","ShortDescription":"Baleen P2P Image Sharing"}`+"\n", version.Version)
 			return
 		}
 	}

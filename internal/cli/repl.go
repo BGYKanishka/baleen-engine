@@ -17,6 +17,8 @@ import (
 	"github.com/BGYKanishka/baleen-engine/internal/logger"
 	"github.com/BGYKanishka/baleen-engine/internal/network"
 	"github.com/BGYKanishka/baleen-engine/internal/transfer"
+	"github.com/BGYKanishka/baleen-engine/internal/updater"
+	"github.com/BGYKanishka/baleen-engine/internal/version"
 	"github.com/chzyer/readline"
 )
 
@@ -50,7 +52,7 @@ func (s *PendingApprovalStore) Store(r transfer.ApprovalRequest) {
 func (s *PendingApprovalStore) Load() (transfer.ApprovalRequest, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	for len(s.queue) > 0 {
 		req := s.queue[0]
 		// Skip any requests that were already cancelled/resolved
@@ -93,6 +95,14 @@ func Start(ctx EngineContext) {
 	var pendingReq *transfer.ApprovalRequest
 
 	printWelcome()
+
+	go func() {
+		res, err := updater.CheckForUpdate(version.Version, false)
+		if err == nil && res.UpdateAvailable {
+			fmt.Printf("\n\nUPDATE AVAILABLE: Version %s is out! Run 'docker extension update yehankanishka/baleen-engine:latest' to upgrade.\n\n", res.LatestVersion)
+			rl.Refresh()
+		}
+	}()
 
 	for {
 		select {

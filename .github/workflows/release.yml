@@ -29,24 +29,32 @@ jobs:
       - name: Run Vet
         run: go vet ./...
 
+      - name: Get Version Without V
+        id: version
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "val=$VERSION" >> $GITHUB_OUTPUT
+
       - name: Build Binaries
         run: |
           mkdir -p build
           
+          LDFLAGS="-s -w -X 'github.com/BGYKanishka/baleen-engine/internal/version.Version=${{ steps.version.outputs.val }}'"
+          
           echo "Building for Linux (amd64)..."
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o build/baleen-linux-amd64 ./cmd/baleen
+          GOOS=linux GOARCH=amd64 go build -ldflags="$LDFLAGS" -o build/baleen-linux-amd64 ./cmd/baleen
           
           echo "Building for Linux (arm64)..."
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o build/baleen-linux-arm64 ./cmd/baleen
+          GOOS=linux GOARCH=arm64 go build -ldflags="$LDFLAGS" -o build/baleen-linux-arm64 ./cmd/baleen
           
           echo "Building for macOS (amd64 / Intel)..."
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o build/baleen-darwin-amd64 ./cmd/baleen
+          GOOS=darwin GOARCH=amd64 go build -ldflags="$LDFLAGS" -o build/baleen-darwin-amd64 ./cmd/baleen
           
           echo "Building for macOS (arm64 / Apple Silicon)..."
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o build/baleen-darwin-arm64 ./cmd/baleen
+          GOOS=darwin GOARCH=arm64 go build -ldflags="$LDFLAGS" -o build/baleen-darwin-arm64 ./cmd/baleen
           
           echo "Building for Windows (amd64)..."
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o build/baleen-windows-amd64.exe ./cmd/baleen
+          GOOS=windows GOARCH=amd64 go build -ldflags="$LDFLAGS" -o build/baleen-windows-amd64.exe ./cmd/baleen
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
@@ -77,12 +85,6 @@ jobs:
         with:
           images: yehankanishka/baleen-engine
 
-      - name: Get Version Without V
-        id: version
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          echo "val=$VERSION" >> $GITHUB_OUTPUT
-
       - name: Build and push Extension Image
         uses: docker/build-push-action@v7
         with:
@@ -90,4 +92,5 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: VERSION=${{ steps.version.outputs.val }}
           tags: yehankanishka/baleen-engine:latest,yehankanishka/baleen-engine:${{ steps.version.outputs.val }}

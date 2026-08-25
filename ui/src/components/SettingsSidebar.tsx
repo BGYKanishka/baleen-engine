@@ -33,6 +33,10 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
   const [transferLoaded, setTransferLoaded] = useState(false);
   const [nodeIp, setNodeIp] = useState('');
 
+  // Update Check State
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState('');
+
   const displayName = customName || nodeName || '—';
 
   // Fetch current network settings whenever the sidebar opens (or port becomes available)
@@ -190,6 +194,27 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
       }
     } catch {
       // catch error
+    }
+  };
+
+  const handleManualUpdateCheck = async () => {
+    if (!port) return;
+    setIsCheckingUpdate(true);
+    setUpdateMessage('');
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/update?force=true`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.update_available) {
+        setUpdateMessage(`Update available: ${data.latest_version}`);
+      } else {
+        setUpdateMessage('You are on the latest version!');
+      }
+    } catch {
+      setUpdateMessage('Failed to check for updates.');
+    } finally {
+      setIsCheckingUpdate(false);
     }
   };
 
@@ -375,8 +400,23 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
               <div className="text-center space-y-1">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white tracking-wide">Baleen Engine</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Version 1.0.0
+                  Version 1.0.2
                 </p>
+              </div>
+
+              <div className="flex flex-col items-center space-y-2">
+                <button
+                  onClick={handleManualUpdateCheck}
+                  disabled={isCheckingUpdate}
+                  className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 dark:text-blue-400 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 transition-colors rounded-md border border-blue-200 dark:border-blue-800 disabled:opacity-50"
+                >
+                  {isCheckingUpdate ? 'Checking...' : 'Check for Updates'}
+                </button>
+                {updateMessage && (
+                  <p className={`text-xs ${updateMessage.includes('available') ? 'text-green-600 dark:text-green-400 font-semibold' : 'text-gray-500 dark:text-gray-400'}`}>
+                    {updateMessage}
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-col items-center pt-4 border-t border-gray-100 dark:border-white/5 w-full">
