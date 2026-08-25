@@ -28,6 +28,7 @@ type DownloadResult struct {
 }
 
 var isHex = regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString
+var isDigest = regexp.MustCompile(`^sha256:[0-9a-fA-F]{64}$`).MatchString
 
 // runs a background TCP server to listen for incoming files
 func StartReceiver(ctx context.Context, wg *sync.WaitGroup, listener net.Listener, incomingDir string, approvalChan chan ApprovalRequest, downloadedChan chan DownloadResult, engineLedger *ledger.Ledger, activeTransfers *atomic.Int32, accepting *atomic.Bool) {
@@ -128,10 +129,19 @@ func handleIncomingTransfer(conn net.Conn, incomingDir string, approvalChan chan
 		return
 	}
 
+	// Validate all layer digests before any filesystem operations to prevent
+	for _, layer := range req.Layers {
+		if !isDigest(layer) {
+			slog.Warn("rejected transfer: invalid layer digest from peer", "digest", layer, "peer", req.Author)
+			return
+		}
+	}
+
 	// We'll publish status inside receiveAndApprove based on whether it auto-approves or blocks
 
 	ok := receiveAndApprove(req, encoder, approvalChan)
 	if !ok {
+		PublishStatus(req.ImageName, req.Author, "pull", "rejected")
 		recordCommitWithStatus(req, engineLedger, "Rejected")
 		return
 	}

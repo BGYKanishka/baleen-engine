@@ -3,6 +3,7 @@ package transfer
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -130,6 +131,114 @@ func TestE2E_DeltaTransfer_ReceiverAlreadyHasLayer(t *testing.T) {
 		t.Logf("Delta transfer success — receiver stitched layerA from cache")
 	case <-time.After(15 * time.Second):
 		t.Fatal("timed out waiting for delta result")
+	}
+}
+
+// verifies that a TransferRequest carrying a path-traversal layer digest
+// is silently dropped by the receiver before any file I/O occurs.
+func TestE2E_MaliciousLayerDigest_Rejected(t *testing.T) {
+	tlsCfg, incomingDir, db := testSetup(t)
+
+	listener, addr := testListener(t, tlsCfg)
+	approvalChan := make(chan ApprovalRequest, 1)
+	downloadedChan := make(chan DownloadResult, 1)
+	accepting := &atomic.Bool{}
+	accepting.Store(true)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go StartReceiver(context.Background(), wg, listener, incomingDir, approvalChan, downloadedChan, db, &atomic.Int32{}, accepting)
+	go autoApprove(approvalChan, true)
+
+	// Build a tarball with a valid digest so the sender can inspect it,
+	// but override Layers in the request by sending a raw handshake.
+	maliciousDigest := "../../../../../../tmp/pwned"
+	tarPath := buildMinimalDockerTarball(t, []string{sha256Digest([]byte("legit"))})
+	host, port := parseAddr(t, addr)
+
+	// Dial the receiver directly and send a crafted TransferRequest.
+	conn, err := tls.Dial("tcp", fmt.Sprintf("%s:%d", host, port), &tls.Config{InsecureSkipVerify: true})
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	req := TransferRequest{
+		ImageName: "evil-image:latest",
+		Size:      1024,
+		Hash:      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		Author:    "attacker",
+		ImageArch: "linux/amd64",
+		Layers:    []string{maliciousDigest},
+	}
+	if err := json.NewEncoder(conn).Encode(req); err != nil {
+		t.Fatalf("send request: %v", err)
+	}
+
+	// The receiver should drop the connection — read should return EOF or error.
+	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	buf := make([]byte, 1024)
+	_, err = conn.Read(buf)
+	if err == nil {
+		t.Fatal("expected connection to be dropped for malicious digest, but got a response")
+	}
+	t.Logf("Correctly rejected: %v", err)
+
+	// Verify nothing was written to disk.
+	entries, _ := os.ReadDir(incomingDir)
+	if len(entries) != 0 {
+		t.Errorf("expected empty incomingDir, found %d files", len(entries))
+	}
+
+	// Verify the traversal target was never created.
+	if _, err := os.Stat("/tmp/pwned"); err == nil {
+		os.RemoveAll("/tmp/pwned")
+		t.Fatal("path traversal succeeded — /tmp/pwned was created")
+	}
+
+	_ = tarPath // used only for test setup
+}
+
+// verifies the isDigest regex accepts valid Docker layer digests
+// and rejects path-traversal attempts and other malformed inputs.
+func TestIsDigest_Validation(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		// valid
+		{"sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", true},
+		{"sha256:0000000000000000000000000000000000000000000000000000000000000000", true},
+
+		// path traversal
+		{"../../../../../../tmp/pwned", false},
+		{"../etc/cron.d/backdoor", false},
+		{"sha256:../../../etc/passwd", false},
+
+		// bare hex (missing sha256: prefix)
+		{"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", false},
+
+		// wrong prefix
+		{"sha512:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", false},
+
+		// too short / too long
+		{"sha256:abcd", false},
+		{"sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855aa", false},
+
+		// empty
+		{"", false},
+
+		// uppercase hex (Windows Docker compatibility)
+		{"sha256:E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855", true},
+
+		// mixed case
+		{"sha256:e3b0C44298FC1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", true},
+	}
+
+	for _, tt := range tests {
+		got := isDigest(tt.input)
+		if got != tt.want {
+			t.Errorf("isDigest(%q) = %v, want %v", tt.input, got, tt.want)
+		}
 	}
 }
 
