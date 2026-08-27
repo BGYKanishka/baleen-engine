@@ -168,14 +168,16 @@ docker baleen
 This opens an interactive REPL where you can manage everything from the command line:
 
 ```
-baleen> peers                                - Show active nodes on network
-baleen> push <NODE_NAME> <IMAGE>             - Send a Docker image to a peer
-baleen> history                              - View the transfer ledger
-baleen> gc <all|old|hash> [-rm]              - Run garbage collection
-baleen> prune                                - Clean up old docker images
-baleen> logs                                 - View recent daemon logs
-baleen> stop                                 - Stop the engine
-baleen> exit                                 - Disconnect CLI (engine keeps running)
+Commands:
+  push <NODE_NAME_OR_IP:PORT> <IMAGE>  - Send a Docker image to target
+  peers                                - Show active nodes on network
+  history                              - View the transfer ledger
+  gc <all|old|hash> [-rm]              - Run garbage collection
+  prune                                - Clean up old docker images
+  logs                                 - View recent daemon logs
+  clean logs [-rm]                     - Truncate daemon log (use -rm to delete)
+  stop                                 - Stop the engine and exit
+  exit                                 - Disconnect CLI (engine keeps running)
 ```
 
 ## 📁 Local Data (`~/.baleen`)
