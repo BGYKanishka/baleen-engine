@@ -204,8 +204,12 @@ func handleClientCommand(input string, client *daemonClient, rl *readline.Instan
 	case "prune":
 		clientRunPrune()
 
-	case "clean-logs":
-		clientHandleCleanLogs(client, parts)
+	case "clean":
+		if len(parts) > 1 && parts[1] == "logs" {
+			clientHandleCleanLogs(client, parts)
+		} else {
+			fmt.Println("Unknown command. Try 'clean logs [-rm]'")
+		}
 
 	case "logs":
 		clientHandleLogs(client)
@@ -222,7 +226,7 @@ func handleClientCommand(input string, client *daemonClient, rl *readline.Instan
 		rl.Close()
 		os.Exit(0)
 	default:
-		fmt.Println("Unknown command. Try 'push <NODE> <IMAGE>', 'peers', 'history', 'gc <all|old|hash>', 'prune', 'stop', 'exit'")
+		fmt.Println("Unknown command. Try 'push <NODE> <IMAGE>', 'peers', 'history', 'gc <all|old|hash>', 'prune', 'clean logs', 'stop', 'exit'")
 	}
 }
 
@@ -531,7 +535,7 @@ func printClientWelcome(state service.ServiceState) {
 	fmt.Println("  gc <all|old|hash> [-rm]              - Run garbage collection")
 	fmt.Println("  prune                                - Clean up old docker images")
 	fmt.Println("  logs                                 - View recent daemon logs")
-	fmt.Println("  clean-logs [-rm]                     - Truncate daemon log (use -rm to delete)")
+	fmt.Println("  clean logs [-rm]                     - Truncate daemon log (use -rm to delete)")
 	fmt.Println("  stop                                 - Stop the engine and exit")
 	fmt.Println("  exit                                 - Disconnect CLI (engine keeps running)")
 }

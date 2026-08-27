@@ -71,7 +71,15 @@ func CleanLogs() http.HandlerFunc {
 
 		if req.Remove {
 			if err := os.Remove(logPath); err != nil && !os.IsNotExist(err) {
-				http.Error(w, "Failed to delete log file", http.StatusInternalServerError)
+				// Fallback to truncate if the file cannot be deleted (Windows)
+				file, truncErr := os.OpenFile(logPath, os.O_TRUNC|os.O_WRONLY, 0644)
+				if truncErr == nil {
+					file.Close()
+					w.Header().Set("Content-Type", "application/json")
+					w.Write([]byte(`{"message":"Daemon log truncated (could not delete file in use)"}`))
+					return
+				}
+				http.Error(w, "Failed to delete or truncate log file", http.StatusInternalServerError)
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
