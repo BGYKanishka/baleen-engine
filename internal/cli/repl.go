@@ -268,8 +268,12 @@ func handleCommand(input string, rl *readline.Instance, inputChan chan string, s
 		handlePrune()
 	case "logs":
 		handleLogs()
-	case "clean-logs":
-		handleCleanLogs(parts)
+	case "clean":
+		if len(parts) > 1 && parts[1] == "logs" {
+			handleCleanLogs(parts)
+		} else {
+			fmt.Println("Unknown command. Try 'clean logs [-rm]'")
+		}
 	case "exit":
 		fmt.Println("\nShutting down Baleen Engine...")
 		os.Exit(0)
@@ -287,6 +291,6 @@ func printWelcome() {
 	fmt.Println("  gc <all|old>                        - Run garbage collection on the transfer ledger")
 	fmt.Println("  prune                               - Clean up old docker images")
 	fmt.Println("  logs                                - View recent daemon logs")
-	fmt.Println("  clean-logs [-rm]                    - Truncate daemon log (use -rm to delete)")
+	fmt.Println("  clean logs [-rm]                    - Truncate daemon log (use -rm to delete)")
 	fmt.Println("  exit                                - Shut down engine")
 }
