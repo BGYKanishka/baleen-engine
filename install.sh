@@ -76,15 +76,15 @@ GOOS=linux GOARCH=arm64 go build -o build/baleen-linux-arm64 ./cmd/baleen
 GOOS=windows GOARCH=amd64 go build -o build/baleen-windows-amd64.exe ./cmd/baleen
 
 echo "Building Docker Extension image..."
-docker build -t baleen-extension:latest .
+docker build -t yehankanishka/baleen-engine:latest .
 
 echo "Installing Docker Extension in Docker Desktop..."
 # Check if the extension is already installed to decide between install or update
-if docker extension ls | grep -q "baleen-extension"; then
+if docker extension ls | grep -q "yehankanishka/baleen-engine"; then
     echo "Extension is already installed. Updating it instead..."
-    docker extension update baleen-extension:latest -f
+    docker extension update yehankanishka/baleen-engine:latest -f
 else
-    docker extension install baleen-extension:latest -f
+    docker extension install yehankanishka/baleen-engine:latest -f
 fi
 
 echo "Installation complete!"

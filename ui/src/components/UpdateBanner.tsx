@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createDockerDesktopClient } from '@docker/extension-api-client';
 
 interface UpdateResponse {
   update_available: boolean;
@@ -9,6 +10,24 @@ interface UpdateResponse {
 export default function UpdateBanner({ port, token }: { port: number | null, token: string }) {
   const [updateData, setUpdateData] = useState<UpdateResponse | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const ddClient = createDockerDesktopClient();
+
+  const handleUpdate = async () => {
+    setIsUpdating(true);
+    try {
+      if (ddClient.docker?.cli) {
+        ddClient.docker.cli.exec('extension', ['update', '-f', 'yehankanishka/baleen-engine:latest']).catch(e => {
+          console.log("Expected disconnect during extension update:", e);
+        });
+      } else {
+        throw new Error("Docker CLI is not available");
+      }
+    } catch (e: any) {
+      console.error("Update failed details:", e);
+      setIsUpdating(false);
+    }
+  };
 
   useEffect(() => {
     if (!port) return;
@@ -39,8 +58,17 @@ export default function UpdateBanner({ port, token }: { port: number | null, tok
           <span className="ml-2 text-sm opacity-90">
             Version {updateData.latest_version} is out (you are on {updateData.current_version}).
           </span>
-          <div className="mt-1 font-mono text-xs bg-blue-700/50 px-2 py-1 rounded inline-block">
-            docker extension update yehankanishka/baleen-engine:latest
+          <div className="mt-2 flex items-center gap-3">
+            <button
+              onClick={handleUpdate}
+              disabled={isUpdating}
+              className="px-3 py-1 bg-white text-blue-600 hover:bg-blue-50 transition-colors rounded text-sm font-medium disabled:opacity-75"
+            >
+              {isUpdating ? 'Updating...' : 'Update Now'}
+            </button>
+            <div className="font-mono text-xs bg-blue-700/50 px-2 py-1 rounded inline-block">
+              docker extension update yehankanishka/baleen-engine:latest
+            </div>
           </div>
         </div>
       </div>

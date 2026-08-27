@@ -7,7 +7,7 @@ interface SettingsSidebarProps {
   nodeName: string;
   customName: string;
   onNameChange: (name: string) => void;
-	setNodeName: (name: string) => void;
+  setNodeName: (name: string) => void;
   port: number | null;
   token: string;
 }
@@ -35,6 +35,7 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
 
   // Update Check State
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [updateMessage, setUpdateMessage] = useState('');
 
   const displayName = customName || nodeName || '—';
@@ -50,7 +51,7 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
       .then((data) => {
         if (data.ip) setNodeIp(data.ip);
       })
-      .catch(() => {});
+      .catch(() => { });
 
     fetch(`http://127.0.0.1:${port}/api/network/settings`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -215,6 +216,25 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
       setUpdateMessage('Failed to check for updates.');
     } finally {
       setIsCheckingUpdate(false);
+    }
+  };
+
+  const handleUpdateNow = async () => {
+    setIsUpdating(true);
+    setUpdateMessage('Updating extension (Docker Desktop will reload this tab shortly)...');
+    try {
+      if (ddClient.docker?.cli) {
+        ddClient.docker.cli.exec('extension', ['update', '-f', 'yehankanishka/baleen-engine:latest']).catch(e => {
+          console.log("Expected disconnect during extension update:", e);
+        });
+      } else {
+        throw new Error("Docker CLI is not available");
+      }
+    } catch (e: any) {
+      console.error("Update error details:", e);
+      const errMsg = e?.stderr || e?.message || (typeof e === 'string' ? e : JSON.stringify(e)) || 'Unknown error';
+      setUpdateMessage(`Update failed: ${errMsg}`);
+      setIsUpdating(false);
     }
   };
 
@@ -400,22 +420,33 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
               <div className="text-center space-y-1">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white tracking-wide">Baleen Engine</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Version 1.0.2
+                  Version 1.0.3
                 </p>
               </div>
 
               <div className="flex flex-col items-center space-y-2">
                 <button
                   onClick={handleManualUpdateCheck}
-                  disabled={isCheckingUpdate}
+                  disabled={isCheckingUpdate || isUpdating}
                   className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 dark:text-blue-400 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 transition-colors rounded-md border border-blue-200 dark:border-blue-800 disabled:opacity-50"
                 >
                   {isCheckingUpdate ? 'Checking...' : 'Check for Updates'}
                 </button>
                 {updateMessage && (
-                  <p className={`text-xs ${updateMessage.includes('available') ? 'text-green-600 dark:text-green-400 font-semibold' : 'text-gray-500 dark:text-gray-400'}`}>
-                    {updateMessage}
-                  </p>
+                  <div className="flex flex-col items-center gap-2 mt-2 text-center">
+                    <p className={`text-xs ${updateMessage.includes('available') ? 'text-green-600 dark:text-green-400 font-semibold' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {updateMessage}
+                    </p>
+                    {updateMessage.includes('available') && (
+                      <button
+                        onClick={handleUpdateNow}
+                        disabled={isUpdating}
+                        className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 transition-colors rounded-md disabled:opacity-50"
+                      >
+                        {isUpdating ? 'Updating...' : 'Update Now'}
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
 
