@@ -71,7 +71,11 @@ func runBrowseSession(parentCtx context.Context, resolver *zeroconf.Resolver, cu
 			if !enabled.Load() {
 				continue
 			}
-			if entry.Instance == currentNodeName {
+
+			// zeroconf escapes spaces in the instance name with a backslash
+			unescapedInstance := strings.ReplaceAll(entry.Instance, "\\ ", " ")
+
+			if unescapedInstance == currentNodeName {
 				continue
 			}
 
@@ -103,15 +107,15 @@ func runBrowseSession(parentCtx context.Context, resolver *zeroconf.Resolver, cu
 			}
 
 			if fingerprint == "" {
-				slog.Warn("ignoring peer with no TLS fingerprint", "peer", entry.Instance, "ip", validAddress)
+				slog.Warn("ignoring peer with no TLS fingerprint", "peer", unescapedInstance, "ip", validAddress)
 				continue
 			}
 
 			prMap := registry.GetAllPeers()
-			if _, exists := prMap[entry.Instance]; !exists {
-				slog.Info("found remote peer", "peer", entry.Instance, "ip", validAddress)
+			if _, exists := prMap[unescapedInstance]; !exists {
+				slog.Info("found remote peer", "peer", unescapedInstance, "ip", validAddress)
 			}
-			registry.AddPeer(entry.Instance, validAddress, fingerprint)
+			registry.AddPeer(unescapedInstance, validAddress, fingerprint)
 		}
 	}(entries)
 
