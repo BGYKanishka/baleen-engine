@@ -37,12 +37,22 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateMessage, setUpdateMessage] = useState('');
+  const [appVersion, setAppVersion] = useState('—');
 
   const displayName = customName || nodeName || '—';
 
   // Fetch current network settings whenever the sidebar opens (or port becomes available)
   useEffect(() => {
     if (!isOpen || !port) return;
+
+    fetch(`http://127.0.0.1:${port}/api/version`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.version) setAppVersion(data.version);
+      })
+      .catch(() => { });
 
     fetch(`http://127.0.0.1:${port}/api/node/name`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -420,7 +430,7 @@ export default function SettingsSidebar({ isOpen, onClose, nodeName, customName,
               <div className="text-center space-y-1">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white tracking-wide">Baleen Engine</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Version 1.0.3
+                  Version {appVersion}
                 </p>
               </div>
 

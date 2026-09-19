@@ -65,6 +65,7 @@ func StartDaemonServer(daemonCtx context.Context, ctx cli.EngineContext, token s
 	mux.HandleFunc("POST /api/transfer/settings", withHeartbeat(handlers.TransferSettings()))
 	mux.HandleFunc("POST /api/settings/reset", withHeartbeat(handlers.ResetSettings(ctx)))
 	mux.HandleFunc("GET /api/update", withHeartbeat(handlers.UpdateCheck()))
+	mux.HandleFunc("GET /api/version", withHeartbeat(handlers.Version()))
 
 	// Stop endpoint: UI/CLI call this when the user clicks the Stop button.
 	mux.HandleFunc("POST /api/stop", withHeartbeat(func(w http.ResponseWriter, r *http.Request) {

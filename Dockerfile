@@ -1,5 +1,5 @@
 # Build the React UI
-FROM node:20-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
 COPY ui/package*.json ./
 RUN npm ci
@@ -8,7 +8,7 @@ RUN npm run build
 
 # Create the minimal Extension image
 FROM alpine:3.21
-ARG VERSION="1.0.3"
+ARG VERSION="dev"
 LABEL org.opencontainers.image.title="Baleen"
 LABEL org.opencontainers.image.description="High-speed, P2P Docker image sharing over your local network."
 LABEL org.opencontainers.image.vendor="Baleen"
@@ -21,7 +21,7 @@ LABEL com.docker.extension.screenshots='[{"alt":"Peers — Auto-discovered nodes
 LABEL com.docker.extension.detailed-description="Baleen is a local-first, P2P Docker image sharing engine. Bypass cloud registries and sync images directly between machines on your local network over encrypted TLS connections. Features: mDNS auto-discovery, delta transfers, real-time controls, and approval workflows."
 LABEL com.docker.extension.publisher-url="https://github.com/BGYKanishka/baleen-engine"
 LABEL com.docker.extension.additional-urls='[{"title":"GitHub","url":"https://github.com/BGYKanishka/baleen-engine"}]'
-LABEL com.docker.extension.changelog="v1.0.3 — Bug fixes and stability improvements"
+LABEL com.docker.extension.changelog="Initial stable release"
 LABEL com.docker.extension.categories='["networking","utility"]'
 
 ARG TARGETARCH
